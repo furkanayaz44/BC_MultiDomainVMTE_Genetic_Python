@@ -1,0 +1,2 @@
+# BC_MultiDomainVMTE_Genetic_Python
+BC_MultiDomain_VMTE_Genetik python kodu burada 
