@@ -75,11 +75,11 @@ def genetic_algorithm(vn_count, candidateDomains, population_size, iterations):
 
         # Yeni popülasyonu oluştur
         new_population = [chromosome for chromosome, _ in fitness_scores[:max(1, population_size // 20)]]
-        print(new_population)
+        #print(new_population)
         
         # Yeni popülasyonu oluştur
     
-        print(population)
+        #print(population)
         while len(new_population) < population_size:
             # Rastgele seçim
             parent1, parent2 = random.sample(population, 2)
@@ -98,8 +98,8 @@ def genetic_algorithm(vn_count, candidateDomains, population_size, iterations):
             #new_population.append(child2)
 
         population = new_population
-        print("--------------------------")
-        print(population)
-        print(f"Iteration {iteration + 1}: Best Fitness = {best_fitness}")
+        #print("--------------------------")
+        #print(population)
+        #print(f"Iteration {iteration + 1}: Best Fitness = {best_fitness}")
 
     return best_chromosome, best_fitness
