@@ -1,0 +1,11 @@
+18_12_2025
+kromozom oluşturma için aday domainler içinden rastgele seçim yapıldı ve uygun düğümlere atama işlemi yapıldı.
+istek ve fiziksel ağ için cpu lar sıralanarak yapıldı. 
+deneme_sayfası.py içinde bu kodlar mevcut (domain içi cpu değerleri yok onların düzenlenmesi lazım)
+---------------------------------------------------------------------------------------------------------------------------------
+
+    YAPILACAKLAR
+1. domain içi cpu değerleri yok onların düzenlenmesi lazım
+2. main için oluşturulan kodlar eklenmeli
+3. fitness değeri hesaplanmalı transaction lar işlemi
+4. transaction ların güncelleme işlemi eklenmeli
