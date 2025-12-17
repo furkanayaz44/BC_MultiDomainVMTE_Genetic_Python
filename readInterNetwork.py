@@ -14,7 +14,7 @@ class InterNetworkReader:
         blocks = content.split('\n\n')
 
         self.adjacency_matrix = self._parse_matrix(blocks[0])
-        self.bandwidth_demand = self._parse_matrix(blocks[1])
+        self.bandwidth_matrix = self._parse_matrix(blocks[1])
         self.delay_matrix = self._parse_matrix(blocks[2])
         self.reliability_matrix = self._parse_matrix(blocks[3])
         self.spectrum_matrix = self._parse_matrix(blocks[4])
