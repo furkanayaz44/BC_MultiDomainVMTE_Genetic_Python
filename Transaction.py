@@ -1,19 +1,19 @@
 class Transaction:
     transactionID = 0  # class-level variable
 
-    def __init__(self, as_no, pathlet_id):
-        Transaction.transactionID += 1
-        self.txID = Transaction.transactionID
-        self.asNo = as_no
-        self.pathletID = pathlet_id
-        self.minBandwidth = 0.0
-        self.maxDelay = 0.0
-        self.reliability = 0.0
+    def __init__(self, TransactionId,ASId,Ingress,Egress,PathletId,Bandwidth,Delay,Reliability,Status,Full_Path):
+        self.TransactionId = TransactionId
+        self.ASId = ASId
+        self.pathletID = PathletId
+        self.minBandwidth = Bandwidth
+        self.maxDelay = Delay
+        self.reliability = Reliability
         self.numOfHops = 0
-        self.fullpath = []
-        self.ingress = ""
-        self.egress = ""
+        self.fullpath = Full_Path
+        self.ingress = Ingress
+        self.egress = Egress
         self.status = True
+        self.setNumOfHops = self.setNumOfHops()
 
     def getTransactionID(self):
         return self.txID
@@ -21,8 +21,8 @@ class Transaction:
     def getTotalTransactionSize(self):
         return Transaction.transactionID
 
-    def getASNo(self):
-        return self.asNo
+    def getASId(self):
+        return self.ASId
 
     def getPathletId(self):
         return str(self.pathletID)
@@ -89,7 +89,7 @@ class Transaction:
                 self.fullpath.append(value)
 
     def setNumOfHops(self):
-        self.numOfHops = len(self.fullpath) - 1
+        self.numOfHops = len([int(num) for num in self.fullpath.strip('[]').split(',')])
 
     def getNumOfHops(self):
         return self.numOfHops

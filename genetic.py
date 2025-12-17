@@ -1,4 +1,5 @@
 import random
+from Transaction import Transaction
 
 def generate_population(vn_count, candidateDomains, population_size):
     """
@@ -16,6 +17,10 @@ def generate_population(vn_count, candidateDomains, population_size):
     return population
 
 def fitness_function(chromosome):
+
+    #allTransaction = Transaction()
+    allTransaction,edgeRouter = read_transactions(f"topologies/NSFNET/transactions/transaction_substrate_14_21_1_nodeperisp_5.txt")
+
     """
     Fitness fonksiyonu: Her genetik algoritma için özelleştirilmelidir.
 
@@ -23,6 +28,59 @@ def fitness_function(chromosome):
     :return: Fitness skoru (örnek: toplam değer)
     """
     return sum(chromosome)
+
+def read_transactions(file_path):
+        all_transactions = []
+        edgeRouter = []
+        with open(file_path, 'r') as file:
+            # İlk satırı oku ve atla (başlık satırı)
+            headers = file.readline().strip().split('\t')
+            
+            # Geri kalan satırları işle
+            for line in file:
+                parts = line.strip().split('\t')
+                if len(parts) == 10:
+                    TransactionId = int(parts[0])
+                    ASId = int(parts[1])
+                    Ingress = parts[2]
+                    Egress = parts[3]
+                    PathletId = int(parts[4])
+                    Bandwidth = float(parts[5])
+                    Delay = float(parts[6])
+                    Reliability = parts[7]
+                    Status= parts[8]
+                    Full_Path = parts[9]
+                    # reliability = #5th matrix index 
+
+                    all_transaction = Transaction(TransactionId,ASId,Ingress,Egress,PathletId,Bandwidth,Delay,Reliability,Status,Full_Path
+)   
+                    #print(all_transaction.getNumOfHops())
+                    if (all_transaction.getASId()) == -1:
+                        edgeRouter.append(all_transaction)
+                    else:
+                        all_transactions.append(all_transaction)
+        return all_transactions,edgeRouter
+
+def find_current_as(all_transactions, value,bw):
+    return [path for path in all_transactions if path.CurrentAS == value and path.Bandwidth >= bw]
+
+
+def find_min_hop_for_current_as(all_transactions,currenAS, nextAS,bw):
+
+    result= find_current_as(all_transactions,currenAS,bw)
+    current_as_paths = [path for path in result if path.NextAS == nextAS]
+    # Eğer filtrelenmiş liste boşsa, None döndür
+    if not current_as_paths:
+        current_as_paths = [path for path in result if path.PreviousAS == nextAS]
+        if not current_as_paths:
+            return -1
+        
+    # Hop değeri en küçük olan nesneyi bul
+    min_hop_path = min(current_as_paths, key=lambda path: path.Hop)
+    return min_hop_path
+        #random_path = random.choice(current_as_paths)
+        #return random_path
+
 
 def crossover(parent1, parent2, candidateDomains):
     """
