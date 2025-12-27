@@ -2,14 +2,6 @@ import random
 from blockchain.Transaction import Transaction
 
 def generate_population(vn_count, candidateDomains, population_size):
-    """
-    Rastgele başlangıç popülasyonu oluşturur.
-
-    :param vn_count: Kromozom başına alel sayısı (gene sayısı)
-    :param candidateDomains: Her gen için seçilebilecek değerlerin listesi (2D array)
-    :param population_size: Popülasyonun toplam kromozom sayısı
-    :return: Başlangıç popülasyonu (liste)
-    """
     population = []
     for _ in range(population_size):
         chromosome = [random.choice(candidateDomains[i]) for i in range(vn_count)]
@@ -19,7 +11,7 @@ def generate_population(vn_count, candidateDomains, population_size):
 def fitness_function(chromosome):
 
     #allTransaction = Transaction()
-    allTransaction,edgeRouter = read_transactions(f"topologies/NSFNET/transactions/transaction_substrate_14_21_1_nodeperisp_5.txt")
+    #allTransaction,edgeRouter = read_transactions(f"topologies/NSFNET/transactions/transaction_substrate_14_21_1_nodeperisp_5.txt")
 
     """
     Fitness fonksiyonu: Her genetik algoritma için özelleştirilmelidir.
@@ -83,14 +75,7 @@ def find_min_hop_for_current_as(all_transactions,currenAS, nextAS,bw):
 
 
 def crossover(parent1, parent2, candidateDomains):
-    """
-    Çaprazlama işlemini gerçekleştirir.
 
-    :param parent1: Birinci ebeveyn kromozomu
-    :param parent2: İkinci ebeveyn kromozomu
-    :param candidateDomains: Her gen için olası değerlerin listesi (2D array)
-    :return: Çocuk kromozomu
-    """
     child = []
     for i in range(len(parent1)):
         if parent1[i] != parent2[i]:
@@ -106,15 +91,7 @@ def crossover(parent1, parent2, candidateDomains):
     return child
 
 def genetic_algorithm(vn_count, candidateDomains, population_size, iterations):
-    """
-    Genetik algoritma işlemini gerçekleştirir.
 
-    :param vn_count: Kromozom başına alel sayısı (gene sayısı)
-    :param candidateDomains: Her gen için seçilebilecek değerlerin listesi (2D array)
-    :param population_size: Başlangıç popülasyonu büyüklüğü
-    :param iterations: Maksimum iterasyon sayısı
-    :return: En iyi kromozom ve fitness değeri
-    """
     # Başlangıç popülasyonunu oluştur
     population = generate_population(vn_count, candidateDomains, population_size)
 

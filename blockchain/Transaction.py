@@ -14,7 +14,26 @@ class Transaction:
         self.egress = Egress
         self.status = True
         self.setNumOfHops = self.setNumOfHops()
-									
+
+
+    def find_current_as(self,all_transactions, value,bw):
+        return [path for path in all_transactions if path.CurrentAS == value and path.Bandwidth >= bw]
+
+    def find_min_hop_for_current_as(self,all_transactions,currenAS, nextAS,bw):
+
+        result= self.find_current_as(all_transactions,currenAS,bw)
+        current_as_paths = [path for path in result if path.NextAS == nextAS]
+        # Eğer filtrelenmiş liste boşsa, None döndür
+        if not current_as_paths:
+            current_as_paths = [path for path in result if path.PreviousAS == nextAS]
+            if not current_as_paths:
+                return -1
+        
+        # Hop değeri en küçük olan nesneyi bul
+        min_hop_path = min(current_as_paths, key=lambda path: path.Hop)
+        return min_hop_path
+        #random_path = random.choice(current_as_paths)
+        #return random_path
 
     def getTransactionID(self):
         return self.txID

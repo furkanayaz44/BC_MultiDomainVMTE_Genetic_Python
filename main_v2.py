@@ -1,6 +1,6 @@
 import os
 import random
-from readFiles.readInterNetwork import InterNetworkReader
+from readFiles.InterNetworkReader import InterNetworkReader
 from readFiles.readVirtualNetwork import VirtualNetworkRequest
 from readFiles.IntraNetworkReader import IntraNetworkReader
 from readFiles.TransactionReader import TransactionReader
@@ -11,35 +11,34 @@ from genetic import genetic_algorithm
 networkType= "NSFNET"
 folder =f"topologies/"+networkType
 
+#bu sayı interdomain içerisindeki node sayısını ifade etmektedir
+num_intranetwork_nodes = 5
 
 def main():
-    directory_path_Substrate = f"{folder}/internetwork/"
-    all_files = os.listdir(directory_path_Substrate)
-    txt_files_Substrate = [file for file in all_files if file.endswith('.txt')]
+    directory_path_InterNetwork = f"{folder}/internetwork/"
+    all_files = os.listdir(directory_path_InterNetwork)
+    txt_files_Names_InterNetwork = [file for file in all_files if file.endswith('.txt')]
 
-    for file_name in txt_files_Substrate:
-        file_path = os.path.join(directory_path_Substrate, file_name)
+    for file_name in txt_files_Names_InterNetwork:
+        file_path_InterNetwork = os.path.join(directory_path_InterNetwork, file_name)
         
-        interNetwork = InterNetworkReader(file_path)
+        interNetwork = InterNetworkReader(file_path_InterNetwork)
 
-        adjacencyInterNetwork = interNetwork.get_adjacency_matrix()
-        domainSayisi = len(adjacencyInterNetwork)
-        
+        #adjacencyInterNetwork = interNetwork.get_adjacency_matrix()
         #print(adjacencyInterNetwork)
-        bandwidthInterNetwork = interNetwork.get_bandwidth_matrix()
+        #bandwidthInterNetwork = interNetwork.get_bandwidth_matrix()
 
     #-----------------------------------------------------------------------
     # Randomly select and read intranetworks based on the number of internetwork nodes
-    directory_path_Substrate = f"{folder}/intranetwork/"
-    #bu sayı interdomain içerisindeki node sayısını ifade etmektedir
-    numberOfInterNodes = 10
-
-    topologies = IntraNetworkReader.load_all_topologies_with_node_count(directory_path_Substrate,numberOfInterNodes)
+    directory_path_IntraNetwork = f"{folder}/intranetwork/"
     
+    #intra network düğüm sayısına göre okuma yapıyor
+    topologies = IntraNetworkReader.load_all_topologies_with_node_count(directory_path_IntraNetwork,num_intranetwork_nodes)
+    #domain sayısına göre rastgele intranetwork seçiyor
     selected_topologies = random.sample(topologies, interNetwork.get_numberOfInterNodes())
-    for topo in selected_topologies:
-        file_name = topo.file_name
-        print(file_name)
+    #sadece cpu değerlerinin tutulduğu yer
+    cpu_value_all_intra_networks = [ [line[0] for line in topo.cpu_matrix] for topo in selected_topologies ]
+    
     #----------------------------------------------------------------------------
 
     #-----------------------------------------------------------------------
@@ -53,11 +52,11 @@ def main():
             prefix = "_".join(parts[:-1])
 
     #print(prefix)
-    file_path_Transaction = f"{prefix}_{numberOfInterNodes}.txt"
+    file_path_Transaction = f"{prefix}_{num_intranetwork_nodes}.txt"
     full_path_Transaction = os.path.join(directory_path_Transaction, file_path_Transaction)
-    all_transactions = TransactionReader(full_path_Transaction)
-    ilk = all_transactions[0]
-    print(ilk.fullpath)
+    allTransaction,edgeRouter = TransactionReader(full_path_Transaction)
+    first = allTransaction[0]
+    print(first.fullpath)
 
     #read vn
     directory_path_VR = f"{folder}/virtualrequests/"
@@ -79,11 +78,6 @@ def main():
         cpuVirtual = virtualRequests.cpu_ram_demand
         candidateDomains = virtualRequests.candidate_domains
 
-        # print("Adjacency Matrix:", adjacencyVirtual)
-        # print("Bandwidth Matrix:", bandwidthVirtual)
-        # print("Delay Matrix:", delayVirtual)
-        # print("Reliability Matrix:", reliabilityVirtual)
-        # print("CPU Matrix:", cpuVirtual)
 
         population_size = 6  # Popülasyon büyüklüğü
         iterations = 50  # Maksimum iterasyon sayısı
