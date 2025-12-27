@@ -1,5 +1,5 @@
 import random
-from Transaction import Transaction
+from blockchain.Transaction import Transaction
 
 def generate_population(vn_count, candidateDomains, population_size):
     """
