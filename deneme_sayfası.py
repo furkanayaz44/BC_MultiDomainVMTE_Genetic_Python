@@ -19,9 +19,7 @@ def best_unused_node_in_domain(domain_mat, cpu_demand, used_node_idxs_1based):
             best_idx = idx1
     return best_idx
 
-def build_chromosome_sorted_cpu_random_domain_unique_nodes(
-    istekler, v_cpu_demands, domain_mats, seed=None, max_tries=500
-):
+def build_chromosome_sorted_cpu_random_domain_unique_nodes(istekler, v_cpu_demands, domain_mats, seed=None, max_tries=500):
     """
     istekler: [[d1,d2], ...] (her sanal düğümün domain adayları)
     v_cpu_demands: [cpu1,cpu2,...]

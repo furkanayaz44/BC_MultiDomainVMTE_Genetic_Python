@@ -17,10 +17,8 @@ class IntraNetworkReader:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
 
-        # 2 veya daha fazla boş satır ile bloklara ayır (daha sağlam)
         blocks = re.split(r"\n\s*\n", content)
 
-        # 6 blok bekliyoruz: adjacency, bandwidth, delay, reliability, spectrum, cpu
         if len(blocks) < 6:
             raise ValueError(
                 f"{file_path} içinde 6 blok matris bekleniyordu ama {len(blocks)} bulundu."
@@ -33,10 +31,10 @@ class IntraNetworkReader:
         self.spectrum_matrix    = self._parse_block(blocks[4])
         self.cpu_matrix         = self._parse_block(blocks[5])
 
-        return self  # istersen zincirleme kullanım için
+        return self
 
     def _parse_block(self, block):
-        # Tab veya boşluk ile ayrılmış sayıları da okuyabilsin
+        # Tab veya boşluk ile ayrılmış sayıları okuma
         return [list(map(int, re.split(r"\s+", line.strip())))
                 for line in block.strip().splitlines()
                 if line.strip()]
@@ -56,8 +54,8 @@ class IntraNetworkReader:
     def get_spectrum_matrix(self):
         return self.spectrum_matrix
 
-
-    def load_all_topologies_with_node_count(folder_path, target_node_count=5):
+    #butun intra arasında rastgele alıyordu degisti
+    def load_all_topologies_with_node_count(folder_path, target_node_count):
    
         topologies = []
 
@@ -65,16 +63,31 @@ class IntraNetworkReader:
             raise FileNotFoundError(f"Klasör bulunamadı: {folder_path}")
 
         for fname in sorted(os.listdir(folder_path)):
-            # En baştaki sayıyı çek (sende vardı)
+            # En baştaki sayıyı çek
             match = re.match(r"[^0-9]*([0-9]+)_", fname)
             if match and int(match.group(1)) == target_node_count:
                 full_path = os.path.join(folder_path, fname)
 
-                # klasörleri atla
                 if not os.path.isfile(full_path):
                     continue
 
                 topo = IntraNetworkReader().load_from_file(full_path)
                 topologies.append(topo)
+
+        return topologies
+    
+    #bu kod var olan text den gelen kullanılan intraları alıyor
+    def load_intra_topology(folder_path, intraNameList):
+        topologies = []
+
+        if not os.path.isdir(folder_path):
+            raise FileNotFoundError(f"Klasör bulunamadı: {folder_path}")
+        
+        for fname in intraNameList:            
+            full_path = os.path.join(folder_path, fname)
+            if not os.path.isfile(full_path):
+                continue
+            topo = IntraNetworkReader().load_from_file(full_path)
+            topologies.append(topo)
 
         return topologies
