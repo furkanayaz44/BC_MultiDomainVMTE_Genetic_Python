@@ -30,19 +30,21 @@ def main():
 
     #-----------------------------------------------------------------------
     # Randomly select and read intranetworks based on the number of internetwork nodes
+    #INTRA NETWORK
     directory_path_IntraNetwork = f"{folder}/intranetwork/"
     
     #yeni kod gelen txt ye göre ekleme yapıyor
     intraNameList = readIntraNetwork_UsingTextFile(num_intranetwork_nodes)
-    topologies = IntraNetworkReader.load_intra_topology(directory_path_IntraNetwork,intraNameList)
+    intraNetworkTopologies = IntraNetworkReader.load_intra_topology(directory_path_IntraNetwork,intraNameList)
 
     #intra network düğüm sayısına göre okuma yapıyor
     #topologies = IntraNetworkReader.load_all_topologies_with_node_count(directory_path_IntraNetwork,num_intranetwork_nodes)
 
     #domain sayısına göre rastgele intranetwork seçiyor
-    selected_topologies = random.sample(topologies, interNetwork.get_numberOfInterNodes())
+    #selected_topologies = random.sample(topologies, interNetwork.get_numberOfInterNodes())
+    
     #sadece cpu değerlerinin tutulduğu yer
-    cpu_value_all_intra_networks = [ [line[0] for line in topo.cpu_matrix] for topo in selected_topologies ]
+    #cpu_value_all_intra_networks = [ [line[0] for line in topo.cpu_matrix] for topo in selected_topologies ]
     
     #----------------------------------------------------------------------------
 
@@ -61,7 +63,7 @@ def main():
     file_path_Transaction = f"{prefix}_{num_intranetwork_nodes}.txt"
     full_path_Transaction = os.path.join(directory_path_Transaction, file_path_Transaction)
     allTransaction,edgeRouter = TransactionReader(full_path_Transaction)
-    first = allTransaction[0]
+    #first = allTransaction[0]
     #print(first.fullpath)
 
     #read vn
@@ -97,15 +99,13 @@ def main():
         #print("Best Fitness:", best_fitness)
         #-----------------------------------------------
 
-        solver = GeneticDomainSolver(cpu_value_all_intra_networks, candidateDomains, cpu_demand_VirtualNetwork[0])
-        en_iyi_cozum, puan = solver.run(population_size=4, generations=1, mutation_rate=0.1, seed=None)
+        solver = GeneticDomainSolver(allTransaction,edgeRouter,interNetwork, intraNetworkTopologies, virtualRequests)
+        en_iyi_cozum, puan = solver.run(population_size=50, generations=100, mutation_rate=0.1, seed=None)
 
         print("\n--- SONUÇ ---")
         print(f"En İyi Fitness Skoru: {puan}")
         print(f"En İyi Kromozom: {en_iyi_cozum}")
 
-
-        print("aaa")
 
 
 def readIntraNetwork_UsingTextFile(num_intranetwork_nodes):

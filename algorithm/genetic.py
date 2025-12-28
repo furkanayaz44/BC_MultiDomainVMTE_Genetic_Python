@@ -1,17 +1,224 @@
 import random
 from typing import List, Optional, Tuple, Dict
-
+import numpy as np
+import networkx as nx
 class GeneticDomainSolver:
-    def __init__(self, cpu_value_all_intra_networks: List[List[int]], candidateDomains: List[List[int]], cpu_demand_VirtualNetwork: List[float]):
+    def __init__(self, allTransaction,edgeRouter,interNetwork, intraNetworkTopologies, virtualRequests):
         
-        self.cpu_value_all_intra_networks = cpu_value_all_intra_networks      # [DomainID][NodeIndex] = CPU Kapasitesi
-        self.candidateDomains = candidateDomains      # [[Domain1, Domain2], ...]
-        self.cpu_demand_VirtualNetwork = cpu_demand_VirtualNetwork        # [Talep1, Talep2, ...]
-        self.num_genes = len(candidateDomains)
+        self.allTransaction = allTransaction
+        self.edgeRouter = edgeRouter
+        self.interNetwork = interNetwork
+        self.intraNetworkTopologies = intraNetworkTopologies
+        self.virtualRequests = virtualRequests
+
+        self.cpu_value_all_intra_networks = [ [line[0] for line in topo.cpu_matrix] for topo in self.intraNetworkTopologies ]
+        self.candidateDomains = self.virtualRequests.candidate_domains      # [[Domain1, Domain2], ...]
+        cpuVirtual = self.virtualRequests.cpu_ram_demand
+        tmp = [ [line[0] for line in cpuVirtual] ]        # [Talep1, Talep2, ...]
+        self.cpu_demand_VirtualNetwork = tmp[0]
+        self.num_genes = len(self.candidateDomains)
         
         self.sorted_indices = sorted(range(self.num_genes), key=lambda i: self.cpu_demand_VirtualNetwork[i], reverse=True)
 
+        self.interNetworkNumpyAjacencyGraph = self.convertGxInterNetwork()
+        self.edgeRouterDomainVertexList = self.edgeRouterDomainNodeListSeperate()
+        self.intraNetworkGraphwithBWMatrix = self.convertGxAllIntraNetwork()
+        
 
+
+    def convertGxAllIntraNetwork(self):
+        gx_list = []
+        for intra in self.intraNetworkTopologies:
+            adj_matrix = np.array(intra.adjacency_matrix)
+            bw_matrix = np.array(intra.bandwidth_matrix)
+            G = nx.Graph()
+            rows, cols = adj_matrix.shape
+            for i in range(rows):
+                for j in range(cols):
+                    if adj_matrix[i][j] == 1:
+                        G.add_edge(i, j, bw=bw_matrix[i][j])
+            #nparray = nx.from_numpy_array(G)
+            gx_list.append(G)
+        return gx_list
+
+    def convertGxInterNetwork(self):
+         np_matris = np.array(self.interNetwork.adjacency_matrix)
+         G = nx.from_numpy_array(np_matris)
+         return G
+
+    #edgeRouter bölme işlemi
+    def edgeRouterDomainNodeListSeperate(self):
+        list = []
+        for edge in self.edgeRouter:
+            transactionIdIngress = edge.TransactionId
+            list.append([edge.edgeDomainIngress,edge.edgeNodeIngress,transactionIdIngress])
+
+            transactionIdEgress = edge.TransactionId
+            list.append([edge.edgeDomainEgress,edge.edgeNodeEgress,transactionIdEgress])
+            np_matris = np.array(list)
+        return np_matris
+    
+
+    def find_shortest_path_by_bw(self,graph, source, dest, required_bw):
+        valid_edges = [
+            (u, v) for u, v, attr in graph.edges(data=True) 
+            if attr.get('bw', 0) >= required_bw
+        ]
+        
+        filtered_G = graph.edge_subgraph(valid_edges)
+        
+        try:
+            path = nx.shortest_path(filtered_G, source=source, target=dest)
+            
+            hop_count = len(path) - 1
+            return path, hop_count
+            
+        except nx.NetworkXNoPath:
+            return None, 0
+
+    def calculate_fitness(self, chromosome: List[str]) -> float:
+        
+        if chromosome is None: return 0.0
+
+        adjMatrixVirtualRequests = self.virtualRequests.adjacency_matrix
+        allIntraNetworkTopologies = self.intraNetworkTopologies
+
+        total_residual_cpu = 0
+        
+        # Hangi domainde hangi node kullanılmış ve ne kadar talep var?
+        #1. domain bilgisi 2. intra dügün bilgisi
+        # kromozom istek boyutu kadar
+        # chromosome: ["1-5", "2-3", ...]
+        n = len(adjMatrixVirtualRequests)
+        totalHops = 0
+        for row in range(n -1):
+            for column in range(row + 1, n):
+                 
+                source = chromosome[row]
+                
+                if adjMatrixVirtualRequests[row][column] > 0:
+                    destination = chromosome[column]
+                    if source != destination:
+                        #source ve destination için domain ve intra vertex leri ayırma burada
+                        sourceDomainId, sourceIntraNodeId  = self._parse_gene(source)
+                        destinationDomainId, destinationIntraNodeId  = self._parse_gene(destination)
+                        
+                        #source eğer edgerouter ise onun bilgisini alıyoruz
+                        # sourceSearchEdge = (self.edgeRouterDomainVertexList[:, 0] == sourceDomainId) & (self.edgeRouterDomainVertexList[:, 1] == sourceIntraNodeId)
+                        # sourceIndex = np.where(sourceSearchEdge)[0]
+                        
+                        #destination eğer edgerouter ise onun bilgisini alıyoruz
+                        # destinationSearchEdge = (self.edgeRouterDomainVertexList[:, 0] == destinationDomainId) & (self.edgeRouterDomainVertexList[:, 1] == destinationIntraNodeId)
+                        # destinationindex = np.where(destinationSearchEdge)[0]
+                        
+                        interDomainPathList = nx.shortest_path(self.interNetworkNumpyAjacencyGraph, source=sourceDomainId, target=destinationDomainId, weight='weight')
+                        length = nx.shortest_path_length(self.interNetworkNumpyAjacencyGraph, source=sourceDomainId, target=destinationDomainId, weight='weight')
+
+
+                        #print(f"interDomainPathList-> {interDomainPathList}")
+                        
+                        currentDomain = sourceDomainId
+                        currentEdge = sourceIntraNodeId
+                        for i in range(len(interDomainPathList)-1):
+                            
+                            sourceSearchEdge = (self.edgeRouterDomainVertexList[:, 0] == currentDomain) & (self.edgeRouterDomainVertexList[:, 1] == currentEdge)
+                            sourceIndex = np.where(sourceSearchEdge)[0]
+
+                            if  interDomainPathList[i]== currentDomain:
+                                #bu dongu ile edge routerlar üzerinde arama yapıp onun bilgisini alıyoruz.
+                                #bu bilgiye göre intra içinde en kısa yol ile edge router gidilecek
+                                #daha sonrasında diğer domain e geçilecek ve orada gezilecek
+                                for counter,edge in enumerate(self.edgeRouter):
+                                    if (edge.edgeDomainIngress == interDomainPathList[i] and edge.edgeDomainEgress == interDomainPathList[i+1]):
+                                        domainicihedefdugum = edge.edgeNodeIngress
+                                        nextDomain = edge.edgeDomainEgress
+                                        nextEdge = edge.edgeNodeEgress
+                                        break
+                                    #egress te 
+                                    if (edge.edgeDomainEgress == interDomainPathList[i] and edge.edgeDomainIngress == interDomainPathList[i+1]):
+                                        domainicihedefdugum = edge.edgeNodeEgress
+                                        nextDomain = edge.edgeDomainIngress
+                                        nextEdge = edge.edgeNodeIngress
+                                        break
+                                if sourceIndex.size == 0:
+                                    path, hops = self.find_shortest_path_by_bw(self.intraNetworkGraphwithBWMatrix[interDomainPathList[i]],currentEdge,domainicihedefdugum,1)
+                                    totalHops = totalHops + hops
+                                    #print(f"Seçilen Yol: {path}")
+                                    #print(f"Adım Sayısı (Hop): {hops}")
+                                #edge router else ise
+                                else:
+                                    numOfHops = 100000
+                                    for count, transaction in enumerate(self.allTransaction):
+                                        if transaction.edgeDomainEgress == currentDomain:
+                                            if (transaction.edgeNodeIngress ==  currentEdge and transaction.edgeNodeEgress == domainicihedefdugum) or (transaction.edgeNodeIngress == domainicihedefdugum and transaction.edgeNodeEgress == currentEdge):
+                                                if transaction.getNumOfHops() < numOfHops:
+                                                    #burada sadece hop sayısı alıyoruz buraya guncelleme islemi gelecek
+                                                    numOfHops = transaction.getNumOfHops()
+                                                    path = transaction.getFullPath
+                                    # +1 artık bu kısımla işim bitti sonra ki domain e geçtiğim için eklendi
+                                    totalHops = totalHops + numOfHops + 1
+                                    #print(numOfHops)
+                            currentDomain = nextDomain
+                            currentEdge = nextEdge
+
+
+
+
+                        # for i in range(len(interDomainPathList)-1):
+                        #     if  interDomainPathList[i]== sourceDomainId:
+                        #         #bu dongu ile edge routerlar üzerinde arama yapıp onun bilgisini alıyoruz.
+                        #             #bu bilgiye göre intra içinde en kısa yol ile edge router gidilecek
+                        #             #daha sonrasında diğer domain e geçilecek ve orada gezilecek
+                        #         for counter,edge in enumerate(self.edgeRouter):
+                        #             if (edge.edgeDomainIngress == interDomainPathList[i] and edge.edgeDomainEgress == interDomainPathList[i+1]):
+                        #                 domainicihedefdugum = edge.edgeNodeIngress
+                        #                 nextDomain = edge.edgeDomainEgress
+                        #                 nextEdge = edge.edgeNodeEgress
+                        #                 break
+                        #             #egress te 
+                        #             if (edge.edgeDomainEgress == interDomainPathList[i] and edge.edgeDomainIngress == interDomainPathList[i+1]):
+                        #                 domainicihedefdugum = edge.edgeNodeEgress
+                        #                 nextDomain = edge.edgeDomainIngress
+                        #                 nextEdge = edge.edgeNodeIngress
+                        #                 break
+                        #         if sourceIndex.size == 0:
+                        #             path, hops = self.find_shortest_path_by_bw(self.intraNetworkGraphwithBWMatrix[interDomainPathList[i]],sourceIntraNodeId,domainicihedefdugum,1)
+                        #             totalHops = totalHops + hops
+                        #             print(f"Seçilen Yol: {path}")
+                        #             print(f"Adım Sayısı (Hop): {hops}")
+
+                        #         #edge router else ise
+                        #         else:
+                        #             numOfHops = 100000
+                        #             for count, transaction in enumerate(self.allTransaction):
+                        #                 if transaction.edgeDomainEgress == sourceDomainId:
+                        #                     if (transaction.edgeNodeIngress ==  sourceIntraNodeId and transaction.edgeNodeEgress == domainicihedefdugum) or (transaction.edgeNodeIngress == domainicihedefdugum and transaction.edgeNodeEgress == sourceIntraNodeId):
+                        #                         if transaction.getNumOfHops() < numOfHops:
+                        #                             #burada sadece hop sayısı alıyoruz buraya guncelleme islemi gelecek
+                        #                             numOfHops = transaction.getNumOfHops()
+                        #             # +1 artık bu kısımla işim bitti sonra ki domain e geçtiğim için eklendi
+                        #             totalHops = totalHops + hops + 1
+                        #             print(numOfHops)
+                            
+                        #     #ara düğümler için transaction üzerinde sadece geçitler hesaplanmalı
+                        #     elif interDomainPathList[i] != destinationDomainId:
+                        #         for counter,edge in enumerate(self.edgeRouter):
+                        #             if (edge.edgeDomainIngress == interDomainPathList[i] and edge.edgeDomainEgress == interDomainPathList[i+1]):
+                        #                 domainicihedefdugum = edge.edgeNodeIngress
+                        #                 nextDomain = edge.edgeDomainEgress
+                        #                 nextEdge = edge.edgeNodeEgress
+                        #                 break
+                        #             #egress te 
+                        #             if (edge.edgeDomainEgress == interDomainPathList[i] and edge.edgeDomainIngress == interDomainPathList[i+1]):
+                        #                 domainicihedefdugum = edge.edgeNodeEgress
+                        #                 nextDomain = edge.edgeDomainIngress
+                        #                 nextEdge = edge.edgeNodeIngress
+                        #                 break
+                        #         print("dest")
+                        
+
+        return totalHops
+    
     def _parse_gene(self, gene: str) -> Tuple[int, int]:
         """ '5-2' stringini (5, 2) tuple'ına çevirir. (DomainID, NodeID) """
         parts = gene.split("-")
@@ -26,14 +233,13 @@ class GeneticDomainSolver:
         best_cpu = -1
         
         for i, cap in enumerate(domain_nodes):
-            idx1 = i + 1  # 1-based index
+            idx1 = i 
             if idx1 in used_nodes:
                 continue
             
             # Kapasite kontrolü
             if cap >= cpu_demand:
                 # Buradaki strateji: En yüksek kapasiteli node'u seçmek (Best Fit)
-                # İsterseniz burayı Random da yapabilirsiniz.
                 if cap > best_cpu:
                     best_cpu = cap
                     best_idx = idx1
@@ -41,9 +247,9 @@ class GeneticDomainSolver:
         return best_idx
 
     def _rebuild_mapping(self, domains: List[int], rng: random.Random) -> Optional[List[str]]:
-        """
-        Crossover sonrası sadece domainler belliyken node atamalarını onarır.
-        """
+        
+        # Crossover sonrası sadece domainler belliyken node atamalarını onarır.
+        
         used_in_domain = {d_id: set() for d_id in range(len(self.cpu_value_all_intra_networks))}
         genes = [None] * self.num_genes
 
@@ -75,7 +281,7 @@ class GeneticDomainSolver:
         return genes
 
     def create_chromosome(self, rng: random.Random) -> Optional[List[str]]:
-        """ Rastgele geçerli bir kromozom (birey) oluşturur. """
+        # Rastgele geçerli bir kromozom (birey) oluşturur.
         max_tries = 50 
         for _ in range(max_tries):
             used_in_domain = {d_id: set() for d_id in range(len(self.cpu_value_all_intra_networks))}
@@ -104,35 +310,10 @@ class GeneticDomainSolver:
                 return chrom
         return None
 
-    # --- GA BİLEŞENLERİ (YENİ EKLENENLER) ---
 
-    def calculate_fitness(self, chromosome: List[str]) -> float:
-        """
-        FITNESS HESAPLAMA:
-        Burada amaç, seçilen node'ların ne kadar verimli kullanıldığıdır.
-        Örnek Fitness: (Toplam Node Kapasitesi - Toplam Kullanılan CPU) 
-        Yani: Node'larda ne kadar çok boş yer kalırsa o kadar iyi (Load Balancing).
-        """
-        if chromosome is None: return 0.0
 
-        total_residual_cpu = 0
-        
-        # Hangi domainde hangi node kullanılmış ve ne kadar talep var?
-        # chromosome: ["1-5", "2-3", ...]
-        for i, gene in enumerate(chromosome):
-            d_id, n_id = self._parse_gene(gene)
-            # n_id 1-based olduğu için array indexi n_id-1
-            node_capacity = self.cpu_value_all_intra_networks[d_id][n_id - 1]
-            demand = self.cpu_demand_VirtualNetwork[i]
-            
-            # Kalan kapasiteyi skora ekle
-            residual = node_capacity - demand
-            total_residual_cpu += residual
-
-        return float(total_residual_cpu)
 
     def crossover(self, parent1: List[str], parent2: List[str], rng: random.Random) -> Optional[List[str]]:
-        """ İki ebeveynden çocuk üretir (Segment Crossover). """
         d1_list = [self._parse_gene(g)[0] for g in parent1]
         d2_list = [self._parse_gene(g)[0] for g in parent2]
 
@@ -152,11 +333,7 @@ class GeneticDomainSolver:
         return self._rebuild_mapping(child_domains, rng)
 
     def mutate(self, chromosome: List[str], mutation_rate: float, rng: random.Random) -> List[str]:
-        """
-        MUTASYON:
-        Belirli bir olasılıkla genin Domain veya Node seçimini değiştirmeye çalışır.
-        Ancak değişiklik sonrası çözümün HALA GEÇERLİ (Feasible) olması gerekir.
-        """
+     
         if rng.random() > mutation_rate:
             return chromosome[:] # Mutasyon yok, kopyasını döndür
 
@@ -197,10 +374,9 @@ class GeneticDomainSolver:
         
         return new_chrom
 
-    # --- ANA ÇALIŞTIRMA FONKSİYONU ---
+
 
     def run(self, population_size=20, generations=100, mutation_rate=0.1, seed=None):
-
         rng = random.Random(seed)
 
         # Başlangıç Popülasyonu Oluştur
@@ -215,62 +391,52 @@ class GeneticDomainSolver:
             return None
 
         best_solution = None
-        best_fitness = -1.0
+        # Minimizasyon olduğu için başlangıç değeri çok büyük olmalı
+        best_fitness = float('inf') 
 
         for gen in range(1, generations + 1):
             
-            #Fitness
-            # (Kromozom, FitnessPuanı) ikilisi
             scored_pop = []
             for chrom in population:
                 fit = self.calculate_fitness(chrom)
                 scored_pop.append((chrom, fit))
                 
-                # Global en iyiyi takip et
-                if fit > best_fitness:
+                if fit < best_fitness:
                     best_fitness = fit
                     best_solution = chrom
-                print(f"({chrom}->{fit})")
-            #Sıralama iyiden en kötüye
-            scored_pop.sort(key=lambda x: x[1], reverse=True)
-            #print(scored_pop)
+                    # print(f"Yeni En İyi: {fit}")
+
+            scored_pop.sort(key=lambda x: x[1], reverse=False)
+
             new_population = []
             
-            # Elitizm: En iyi 2 taneyi doğrudan aktar
             new_population.append(scored_pop[0][0])
             if len(scored_pop) > 1:
                 new_population.append(scored_pop[1][0])
 
-            #Seçilim, Crossover ve Mutasyon ile popülasyonu tamamla
             while len(new_population) < population_size:
-                # Turnuva Seçimi (Rastgele 3 tane al, en iyisini seç)
-                candidates = rng.sample(scored_pop, min(3, len(scored_pop)))
-                parent1 = max(candidates, key=lambda x: x[1])[0]
                 
                 candidates = rng.sample(scored_pop, min(3, len(scored_pop)))
-                parent2 = max(candidates, key=lambda x: x[1])[0]
 
-                # Crossover
+                parent1 = min(candidates, key=lambda x: x[1])[0]
+                
+                candidates = rng.sample(scored_pop, min(3, len(scored_pop)))
+                parent2 = min(candidates, key=lambda x: x[1])[0]
+
                 child = self.crossover(parent1, parent2, rng)
                 
                 if child is None:
-                    # Crossover başarısızsa parentlardan biri geçer
                     child = parent1[:]
                 
-                # Mutasyon
                 child = self.mutate(child, mutation_rate, rng)
                 
                 new_population.append(child)
 
-            # Popülasyonu güncelle
             population = new_population
             
-            # İsteğe bağlı: Her 10 jenerasyonda bilgi ver
             if gen % 10 == 0 or gen == 1:
-                print(f"Jenerasyon {gen}: En İyi Fitness = {best_fitness}")
+                print(f"Jenerasyon {gen}: En İyi Fitness (Maliyet) = {best_fitness}")
             
-            
-
         return best_solution, best_fitness
 
 
@@ -287,9 +453,9 @@ if __name__ == "__main__":
     istekler =  [[5, 3], [4, 10], [6, 1], [5, 2], [4, 3]]
     cpu_demand_VirtualNetwork = [15, 11, 16, 11, 18]
 
-    solver = GeneticDomainSolver(cpu_value_all_intra_networks, istekler, cpu_demand_VirtualNetwork)
-    en_iyi_cozum, puan = solver.run(population_size=4, generations=2, mutation_rate=0.1, seed=None)
+    #solver = GeneticDomainSolver(cpu_value_all_intra_networks, istekler, cpu_demand_VirtualNetwork)
+    #en_iyi_cozum, puan = solver.run(population_size=4, generations=2, mutation_rate=0.1, seed=None)
 
     print("\n--- SONUÇ ---")
-    print(f"En İyi Fitness Skoru: {puan}")
-    print(f"En İyi Kromozom: {en_iyi_cozum}")
+    #print(f"En İyi Fitness Skoru: {puan}")
+    #print(f"En İyi Kromozom: {en_iyi_cozum}")

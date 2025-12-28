@@ -13,8 +13,8 @@ def TransactionReader(file_path):
             if len(parts) == 10:
                 TransactionId = int(parts[0])
                 ASId = int(parts[1])
-                Ingress = int(parts[2])
-                Egress = int(parts[3])
+                Ingress = parts[2]
+                Egress = parts[3]
                 PathletId = int(parts[4])
                 Bandwidth = int(float(parts[5]))
                 Delay = int(float(parts[6]))
@@ -24,7 +24,14 @@ def TransactionReader(file_path):
                 Full_Path = parts[9]
                 
 
-                all_transaction = Transaction(TransactionId,ASId,Ingress,Egress,PathletId,Bandwidth,Delay,Reliability,Status,Full_Path)
+                edgeDomainIngress = int(Ingress[:3])
+                edgeNodeIngress = int(Ingress[3:])
+
+                edgeDomainEgress = int(Egress[:3])
+                edgeNodeEgress = int(Egress[3:])
+
+
+                all_transaction = Transaction(TransactionId,ASId,edgeDomainIngress,edgeNodeIngress,edgeDomainEgress,edgeNodeEgress,PathletId,Bandwidth,Delay,Reliability,Status,Full_Path)
 
                 #print(all_transaction.getNumOfHops())
                 if (all_transaction.getASId()) == -1:
