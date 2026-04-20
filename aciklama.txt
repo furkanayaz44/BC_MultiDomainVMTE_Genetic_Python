@@ -10,3 +10,21 @@ deneme_sayfası.py içinde bu kodlar mevcut (domain içi cpu değerleri yok onla
 3. fitness değeri hesaplanmalı transaction lar işlemi
 4. transaction ların güncelleme işlemi eklenmeli
 4. transaction ların güncelleme işlemi eklenmeli
+
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+21_04_2026
+v3 için greedy ve diğer yapılar var.
+----------------
+çalışan kod v4:
+Greedy CPU
+GRC -> Closeness
+Genetic -> CPU
+Genetic -> Rank 
+Genetic -> Q Learning (deneme amaçlı eklendi)
+
+bunlar çalışıyor her bir ISP için yolları buluyor ve excel e kaydediyor.
+Genel kontroller yapıldı yolları doğru hesaplıyor.
+Her bir örnek için farklı intra seçimi yapılıyor.
+
