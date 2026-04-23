@@ -61,12 +61,13 @@ class TrackingGeneticSolver(GeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "NSFNET"
+networkType = "yeni/NSFNET"
 folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
+INTRA_NODE_COUNTS = [8,10]  # her değer için bağımsız çalışma
+#INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
 
-GA_POPULATION  = 60
-GA_GENERATIONS = 5
+GA_POPULATION  = 100
+GA_GENERATIONS = 50
 GA_MUTATION    = 0.1
 GA_SEED        = None     # None → her çalışmada farklı; int → tekrarlanabilir
 
@@ -79,7 +80,7 @@ METHODS = [
     ("Q-Learning (e-greedy)",        "qlearning", 1.0),
 ]
 
-GEN_SAMPLE_COUNT = 3   # her nesil için kaç örnek kromozom gösterilsin
+GEN_SAMPLE_COUNT = 0   # her nesil için kaç örnek kromozom gösterilsin
 
 
 # -----------------------------------------------------------------------
@@ -106,21 +107,30 @@ def _parse_substrate_filename(fname):
 
 
 def load_intra_networks(num_domains, n_nodes):
-    directory  = f"{folder}/intranetwork/"
-    prefix     = f"adjacency_{n_nodes}_"
-    candidates = sorted([
-        f for f in os.listdir(directory)
-        if f.startswith(prefix) and f.endswith('.txt')
-    ])
-    if not candidates:
-        raise FileNotFoundError(f"'{directory}' icinde '{prefix}*.txt' bulunamadi.")
-    # fixed_file = candidates[0]
-    # selected   = [fixed_file] * num_domains
-    # print(f"[Sabit Secim] Intra topoloji: {fixed_file} x {num_domains} domain")
-    selected = [random.choice(candidates) for _ in range(num_domains)]
-    print(f"[Rastgele Secim] Her domain icin secilen intra topolojiler:")
+    directory = f"{folder}/intranetwork/"
+    list_file = f"{folder}/intra_domain_used_list.txt"
+
+    with open(list_file) as f:
+        all_lines = [
+            line.strip() for line in f
+            if line.strip() and not line.strip().startswith('#')
+        ]
+
+    prefix   = f"adjacency_{n_nodes}_"
+    selected = [ln for ln in all_lines if ln.startswith(prefix)]
+
+    if len(selected) < num_domains:
+        raise FileNotFoundError(
+            f"'{list_file}' icinde {n_nodes} node icin {num_domains} dosya bulunamadi "
+            f"(bulunan: {len(selected)})."
+        )
+
+    selected = selected[:num_domains]
+
+    print(f"[Liste Secim] Intra topoloji ({n_nodes} node, {num_domains} domain):")
     for i, f in enumerate(selected):
         print(f"  Domain {i:>2}: {f}")
+
     return IntraNetworkReader.load_intra_topology(directory, selected), selected
 
 
@@ -208,12 +218,32 @@ def _ozet_hesapla(solver, best_chrom):
     döndürür.
     """
     if best_chrom is None:
-        return None, None, "cozum yok"
+        # Neden None? Aday domainlerde CPU yetip yetmediğini kontrol et
+        for gene_idx in range(solver.num_genes):
+            cpu_req = solver.cpu_demand_VirtualNetwork[gene_idx]
+            d1, d2  = solver.candidateDomains[gene_idx]
+            herhangi_yeterli = any(
+                cap >= cpu_req
+                for d in (d1, d2)
+                for cap in solver.cpu_value_all_intra_networks[d]
+            )
+            if not herhangi_yeterli:
+                return "Yetersiz CPU", "Yetersiz CPU", "Yetersiz CPU"
+        return "cozum yok", "cozum yok", "cozum yok"
+
+    # Atanan node'larda CPU kısıt kontrolü
+    for gene_idx, gene in enumerate(best_chrom):
+        d, node = solver._parse_gene(gene)
+        cpu_cap = solver.cpu_value_all_intra_networks[d][node]
+        cpu_req = solver.cpu_demand_VirtualNetwork[gene_idx]
+        if cpu_cap < cpu_req:
+            return "Yetersiz CPU", "Yetersiz CPU", "Yetersiz CPU"
 
     yol_detaylari = solver.trace_solution(best_chrom)
     toplam_hop = 0
     toplam_bw  = 0
     yol_parcalari = []
+    bw_hatasi = False
 
     for link in yol_detaylari:
         bw_talebi = link.get("bw_talebi", 0) or 0
@@ -221,7 +251,11 @@ def _ozet_hesapla(solver, best_chrom):
             tip = seg.get("tip", "")
             hop = seg.get("hop", 0)
             if tip == "HATA":
+                bw_hatasi = True
                 yol_parcalari.append("HATA")
+                continue
+            if isinstance(hop, int) and hop >= 100000:
+                bw_hatasi = True
                 continue
             if tip == "domain gecisi":
                 yol_parcalari.append(
@@ -230,35 +264,37 @@ def _ozet_hesapla(solver, best_chrom):
                 toplam_hop += 1
                 toplam_bw  += 1 * bw_talebi
                 continue
-            # Normal intra segment
             yol = seg.get("yol") or []
             if isinstance(yol, list):
                 yol_parcalari.append("-".join(str(n) for n in yol))
             else:
                 yol_parcalari.append(str(yol))
-            if isinstance(hop, int) and hop < 100000:
-                toplam_hop += hop
-                toplam_bw  += hop * bw_talebi  # hop × bw_talebi = bu linklerde tüketilen BW
+            toplam_hop += hop
+            toplam_bw  += hop * bw_talebi
 
-    bulunan_yol = " | ".join(yol_parcalari)  # sanal linkler arası '|', nodelar arası '-'
+    if bw_hatasi:
+        return "Yetersiz BW", "Yetersiz BW", "Yetersiz BW"
+
+    bulunan_yol = " | ".join(yol_parcalari)
     return toplam_hop, toplam_bw, bulunan_yol
 
 
 def _parse_vr_filename(fname):
     """
-    'virtual_5_1_10_1' → {'dosya': fname, 'bw': 5, 'cpu': 10, 'copy': 1}
-    Format: virtual_{bw}_{?}_{cpu}_{copy}
+    'virtual_5_5_15_1' → {'vn': 5, 'bw': 5, 'cpu': 15, 'copy': 1}
+    Format: virtual_{VNsayisi}_{BW}_{CPU}_{copy}
     """
-    parts = fname.split("_")   # ['virtual', '5', '1', '10', '1']
+    parts = fname.split("_")   # ['virtual', '5', '5', '15', '1']
     try:
         return {
             "dosya": fname,
-            "bw":    int(parts[1]),
+            "vn":    int(parts[1]),
+            "bw":    int(parts[2]),
             "cpu":   int(parts[3]),
             "copy":  int(parts[4]),
         }
     except (IndexError, ValueError):
-        return {"dosya": fname, "bw": "", "cpu": "", "copy": ""}
+        return {"dosya": fname, "vn": "", "bw": "", "cpu": "", "copy": ""}
 
 
 # -----------------------------------------------------------------------
@@ -295,7 +331,7 @@ def olustur_excel_workbook():
             f"GA_{on}_Chromosome",
         ]
 
-    meta = ["VBW", "VCPU", "VCopy", "SNode", "SLink", "SCopy", "NodePerISP"]
+    meta = ["VNode", "VBW", "VCPU", "VCopy", "SNode", "SLink", "SCopy", "NodePerISP"]
 
     ws.append(algo_basliklar + meta)
     for cell in ws[1]:
@@ -336,7 +372,7 @@ def kaydet_excel(wb, greedy_sonuclar: list, greedy_solvers: list,
 
     vr_info  = _parse_vr_filename(vr_fname)
     sub_info = _parse_substrate_filename(substrate_fname)
-    meta_satir = [vr_info["bw"], vr_info["cpu"], vr_info["copy"],
+    meta_satir = [vr_info["vn"], vr_info["bw"], vr_info["cpu"], vr_info["copy"],
                   sub_info["snode"], sub_info["slink"], sub_info["scopy"],
                   node_per_isp]
 
@@ -452,8 +488,8 @@ def run_greedy_method(label, solver_class, centrality_method,
 
     print(f"\n  En iyi fitness  : {fitness}")
     print(f"  En iyi kromozom : {chrom}")
-    if chrom is not None:
-        yazYolDetaylari(path_details)
+    #if chrom is not None:
+        #yazYolDetaylari(path_details)
 
     return chrom, fitness, solver
 
@@ -474,12 +510,16 @@ def run_method(label, selection_mode, softmax_temp,
         selection_mode=selection_mode,
         softmax_temperature=softmax_temp,
     )
-    best_chrom, best_fitness = solver.run(
+    result = solver.run(
         population_size=GA_POPULATION,
         generations=GA_GENERATIONS,
         mutation_rate=GA_MUTATION,
         seed=GA_SEED,
     )
+    if result is None:
+        best_chrom, best_fitness = None, float('inf')
+    else:
+        best_chrom, best_fitness = result
 
     total  = solver.total_chrom_count()
     unique = solver.unique_chrom_count()
@@ -499,19 +539,29 @@ def run_method(label, selection_mode, softmax_temp,
         for (gi, di, dol, ni), qv in en_iyi:
             print(f"    gen={gi}  domain={di}  doluluk={dol}  node={ni}  ->  Q={qv:.4f}")
 
-    if best_chrom is not None:
-        yazYolDetaylari(solver.trace_solution(best_chrom))
+    #if best_chrom is not None:
+        #yazYolDetaylari(solver.trace_solution(best_chrom))
 
     return best_chrom, best_fitness, solver
+
+
+# -----------------------------------------------------------------------
+# Başlangıç sabitleri — modül yüklenirken bir kez okunur
+# Domain ID'leri tüm dosyalarda 0-tabanlıdır:
+#   VR istekleri : 0 = 1. domain, NUM_DOMAINS-1 = son domain
+#   Transaction  : Ingress/Egress "000xxx" → domain 0, "013xxx" → domain 13
+#   Edge router  : aynı 0-tabanlı kural
+# NUM_DOMAINS inter-network komşuluk matrisinin satır sayısından belirlenir.
+# -----------------------------------------------------------------------
+interNetwork, SUBSTRATE_FNAME = load_inter_network()
+NUM_DOMAINS = interNetwork.get_numberOfInterNodes()
 
 
 # -----------------------------------------------------------------------
 # Ana fonksiyon
 # -----------------------------------------------------------------------
 def main():
-    print("[0] Inter-network yukleniyor...")
-    interNetwork, substrate_fname = load_inter_network()
-    num_domains = interNetwork.get_numberOfInterNodes()
+    print(f"[0] Inter-network yuklendi: {SUBSTRATE_FNAME}  |  NUM_DOMAINS={NUM_DOMAINS}")
 
     print("[0] Sanal ag istekleri yukleniyor...")
     virtual_requests_list, vr_filenames = load_virtual_requests()
@@ -523,8 +573,8 @@ def main():
         print(f"  INTRA NODE SAYISI: {n_nodes}")
         print(f"{'*' * 70}")
 
-        print(f"[1] Intra-network yukleniyor ({num_domains} domain, n={n_nodes})...")
-        intraTopologies, _ = load_intra_networks(num_domains, n_nodes)
+        print(f"[1] Intra-network yukleniyor ({NUM_DOMAINS} domain, n={n_nodes})...")
+        intraTopologies, intraNameList = load_intra_networks(NUM_DOMAINS, n_nodes)
 
         print(f"[2] Transaction yukleniyor (n={n_nodes})...")
         allTransaction, edgeRouter = load_transaction(n_nodes)
@@ -590,7 +640,7 @@ def main():
             # EXCEL KAYIT
             # ---------------------------------------------------------------
             kaydet_excel(wb, greedy_sonuclar, greedy_solvers, sonuclar, solvers, vr_fname,
-                         substrate_fname=substrate_fname,
+                         substrate_fname=SUBSTRATE_FNAME,
                          node_per_isp=n_nodes)
 
             # ---------------------------------------------------------------
@@ -604,6 +654,10 @@ def main():
                 yazNesil_Kromozomlar(solver, label, GA_POPULATION)
 
             # """ciz_fitness_egrisi(solvers, [label for label, _, _ in METHODS], vr_idx)"""
+
+        print(f"\nKullanilan Intra Topolojiler (n={n_nodes}, {len(intraNameList)} domain):")
+        for idx, name in enumerate(intraNameList):
+            print(f"  Domain {idx:>2}: {name}")
 
 
 if __name__ == "__main__":

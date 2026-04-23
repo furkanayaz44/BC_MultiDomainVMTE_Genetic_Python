@@ -19,7 +19,7 @@ class InterNetworkReader:
         self.delay_matrix = self._parse_matrix(blocks[2])
         self.reliability_matrix = self._parse_matrix(blocks[3])
         self.spectrum_matrix = self._parse_matrix(blocks[4])
-        self.numberOfInterNodes =len(self.adjacency_matrix)
+        self.numberOfInterNodes = len(self.adjacency_matrix)
 
     def _parse_matrix(self, block):
         return [list(map(int, line.strip().split('\t'))) for line in block.strip().split('\n')]

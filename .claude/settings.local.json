@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python main_v4.py)",
+      "Bash(python -c \"from algorithm.genetic_delay import GeneticDelaySolver, GreedyCPUDelaySolver, CentralityDelayGreedySolver; print\\('Import OK'\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

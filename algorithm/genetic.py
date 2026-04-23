@@ -187,33 +187,30 @@ class GeneticDomainSolver:
         except (nx.NetworkXNoPath, nx.NodeNotFound):
             return None, 100000
 
-    def _find_inter_path_residual(self, src_domain, dst_domain, required_bw, inter_res):
+    def _find_inter_path_residual(self, src_domain, dst_domain, required_bw, er_res):
         """
-        Artık BW haritasına göre inter-domain en kısa yolu bulur;
-        kullanılan her domain bağlantısından required_bw kadar BW düşer.
+        Edge router artık BW'lerine göre inter-domain en kısa yolu bulur.
+        Yalnızca required_bw'yi karşılayan edge router'ı olan domain çiftleri
+        grafiğe eklenir. BW düşümü ana döngüde er_res üzerinden yapılır.
 
         Döner: domain id listesi  — bulunamazsa None
         """
         filtered_G = nx.Graph()
         filtered_G.add_nodes_from(self.interNetworkNumpyAjacencyGraph.nodes())
-        for (u, v), bw in inter_res.items():
-            if bw >= required_bw:
-                filtered_G.add_edge(u, v)
+        for er in self.edgeRouter:
+            if er_res.get(id(er), 0) >= required_bw:
+                filtered_G.add_edge(er.edgeDomainIngress, er.edgeDomainEgress)
 
         try:
-            path = nx.shortest_path(filtered_G, source=src_domain, target=dst_domain)
-            for i in range(len(path) - 1):
-                key = (min(path[i], path[i + 1]), max(path[i], path[i + 1]))
-                if key in inter_res:
-                    inter_res[key] -= required_bw
-            return path
+            return nx.shortest_path(filtered_G, source=src_domain, target=dst_domain)
         except (nx.NetworkXNoPath, nx.NodeNotFound):
             return None
 
-    def _find_bc_residual(self, domain, src_node, dst_node, required_bw, bc_res):
+    def _find_bc_residual(self, domain, src_node, dst_node, required_bw, bc_res, intra_res):
         """
-        Artık BW haritasına göre en az hop'lu BC transaction'ını bulur;
-        seçilen transaction'ın artık BW'sinden required_bw kadar düşer.
+        Artık BW haritasına göre en az hop'lu BC transaction'ını bulur.
+        Seçilen transaction'ın bc_res BW'si düşürülür; aynı zamanda
+        transaction fullpath'indeki fiziksel intra linklerden intra_res düşürülür.
 
         Döner: (transaction, hops)  — bulunamazsa (None, 100000)
         """
@@ -229,7 +226,7 @@ class GeneticDomainSolver:
             )
             if not node_match:
                 continue
-            if bc_res.get(id(t), 0) < required_bw:   # artık BW yetersiz
+            if bc_res.get(id(t), 0) < required_bw:
                 continue
             if t.getNumOfHops() < best_hops:
                 best_hops = t.getNumOfHops()
@@ -237,6 +234,19 @@ class GeneticDomainSolver:
 
         if best_t is not None:
             bc_res[id(best_t)] -= required_bw
+            # fullpath üzerindeki fiziksel intra linklerden BW düş
+            # fullpath formatı: "[DDDNNN, DDDNNN, ...]" — DDD=domain, NNN=node
+            try:
+                nodes = [int(n.strip()) for n in best_t.fullpath.strip('[]').split(',')]
+                domain_links = intra_res.get(domain, {})
+                for i in range(len(nodes) - 1):
+                    n1 = nodes[i]   % 1000
+                    n2 = nodes[i+1] % 1000
+                    key = (min(n1, n2), max(n1, n2))
+                    if key in domain_links:
+                        domain_links[key] -= required_bw
+            except (ValueError, AttributeError):
+                pass
             return best_t, best_hops
 
         return None, 100000
@@ -415,7 +425,7 @@ class GeneticDomainSolver:
         # ---- Artık BW haritaları: bu çağrıya özgü, orijinal değerlerden başlar ----
         # Yerel değişken olduğundan GA/ACO/Greedy ve farklı kromozomlar
         # birbirinin BW tüketimini görmez — tam bağımsızlık sağlanır.
-        intra_res, inter_res, bc_res, er_res = self._build_residual_maps()
+        intra_res, _, bc_res, er_res = self._build_residual_maps()
 
         # Tekil düğüm kısıtı: aynı (domain, node) iki farklı sanal düğüme atanamaz
         seen_genes = set()
@@ -456,9 +466,9 @@ class GeneticDomainSolver:
                     totalHops += hops
                     continue
 
-                # Farklı domain: artık BW'ye göre inter-domain yolu bul
+                # Farklı domain: edge router BW'ye göre inter-domain yolu bul
                 interDomainPathList = self._find_inter_path_residual(
-                    sourceDomainId, destinationDomainId, required_bw, inter_res
+                    sourceDomainId, destinationDomainId, required_bw, er_res
                 )
                 if interDomainPathList is None:
                     totalHops += 100000
@@ -520,7 +530,7 @@ class GeneticDomainSolver:
                         # Edge router: önce BC transaction dene, bulamazsan topoloji
                         t, numOfHops = self._find_bc_residual(
                             currentDomain, currentEdge, domainicihedefdugum,
-                            required_bw, bc_res
+                            required_bw, bc_res, intra_res
                         )
                         if t is None:
                             # BC yeterli BW'ye sahip değil → intra topoloji ile fallback
@@ -545,7 +555,7 @@ class GeneticDomainSolver:
                     if destIsEdgeRouter:
                         t, numOfHops = self._find_bc_residual(
                             destinationDomainId, currentEdge, destinationIntraNodeId,
-                            required_bw, bc_res
+                            required_bw, bc_res, intra_res
                         )
                         if t is None:
                             # BC bulunamadı → topoloji grafıyla dene
@@ -573,7 +583,7 @@ class GeneticDomainSolver:
             return []
 
         # Artık BW haritaları: bu çağrıya özgü, orijinal değerlerden başlar
-        intra_res, inter_res, bc_res, er_res = self._build_residual_maps()
+        intra_res, _, bc_res, er_res = self._build_residual_maps()
 
         adjMatrixVirtualRequests = self.virtualRequests.adjacency_matrix
         n = len(adjMatrixVirtualRequests)
@@ -617,9 +627,9 @@ class GeneticDomainSolver:
                     virtual_links.append(link)
                     continue
 
-                # Farklı domain: artık BW'ye göre inter-domain yol
+                # Farklı domain: edge router BW'ye göre inter-domain yol
                 interDomainPathList = self._find_inter_path_residual(
-                    sourceDomainId, destinationDomainId, required_bw, inter_res
+                    sourceDomainId, destinationDomainId, required_bw, er_res
                 )
                 if interDomainPathList is None:
                     link['segmentler'].append({
@@ -696,7 +706,7 @@ class GeneticDomainSolver:
                         # Edge router → BC transaction dene, bulamazsan topoloji fallback
                         t, numOfHops = self._find_bc_residual(
                             currentDomain, currentEdge, domainicihedefdugum,
-                            required_bw, bc_res
+                            required_bw, bc_res, intra_res
                         )
                         if t is not None:
                             tip = 'intra (blokzincir)'
@@ -737,7 +747,7 @@ class GeneticDomainSolver:
                     if destIsEdgeRouter:
                         t, numOfHops = self._find_bc_residual(
                             destinationDomainId, currentEdge, destinationIntraNodeId,
-                            required_bw, bc_res
+                            required_bw, bc_res, intra_res
                         )
                         if t is not None:
                             link['segmentler'].append({
@@ -1108,7 +1118,7 @@ class GeneticDomainSolver:
                 # Q-Learning için: bu kromozomun fitness'ına göre Q-tablosunu güncelle
                 self._ql_update(chrom, fit)
                 scored_pop.append((chrom, fit))
-                print(f"kromozom:-> {chrom} : fitness:-> {fit}")
+                #print(f"kromozom:-> {chrom} : fitness:-> {fit}")
                 if fit < best_fitness:
                     best_fitness = fit
                     best_solution = chrom
