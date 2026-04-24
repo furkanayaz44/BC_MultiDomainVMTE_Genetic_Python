@@ -11,6 +11,7 @@ from readFiles.TransactionReader import TransactionReader
 
 from algorithm.genetic import GeneticDomainSolver
 from algorithm.centrality import CentralityGreedySolver, GreedyCPUSolver
+from visualize import visualize_solution
 
 
 # -----------------------------------------------------------------------
@@ -61,9 +62,9 @@ class TrackingGeneticSolver(GeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "yeni/NSFNET"
+networkType = "yeni/USNET"
 folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [8,10]  # her değer için bağımsız çalışma
+INTRA_NODE_COUNTS = [5,8,10]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
 
 GA_POPULATION  = 100
@@ -538,7 +539,7 @@ def run_method(label, selection_mode, softmax_temp,
         print("  En yuksek 5 Q-degeri  (gen, domain, doluluk, node) -> Q:")
         for (gi, di, dol, ni), qv in en_iyi:
             print(f"    gen={gi}  domain={di}  doluluk={dol}  node={ni}  ->  Q={qv:.4f}")
-
+    #yol bilgileri yazdirma
     #if best_chrom is not None:
         #yazYolDetaylari(solver.trace_solution(best_chrom))
 
@@ -613,7 +614,7 @@ def main():
             # KARSILASTIRMA TABLOSU
             # ---------------------------------------------------------------
             print(f"\n\n{'=' * 70}")
-            print(f"  KARSILASTIRMA TABLOSU  —  VR #{vr_idx + 1}  |  nodePerISP={n_nodes}")
+            print(f"  KARSILASTIRMA TABLOSU  —  VR #{vr_idx + 1}  |  nodePerISP={n_nodes}  |  {vr_fname}")
             print(f"{'=' * 70}")
             print(f"  {'Yontem':<40} {'Fitness':>10}  {'Toplam':>7}  {'Benzersiz':>9}  {'Oran':>6}")
             print(f"  {'-' * 40}  {'-' * 10}  {'-' * 7}  {'-' * 9}  {'-' * 6}")
@@ -637,6 +638,28 @@ def main():
                 print(f"  {label:<40} {fit_str:>10}  {t:>7}  {u:>9}  {oran:>6}{marker}  {chrom_str}")
 
             # ---------------------------------------------------------------
+            # GÖRSELLEŞTIRME — Rank yönteminin en iyi çözümü
+            # ---------------------------------------------------------------
+            """
+            rank_idx = next(
+                (i for i, (_, mode, _) in enumerate(METHODS) if mode == 'rank'), None
+            )
+            if rank_idx is not None:
+                rank_label, rank_chrom, _ = sonuclar[rank_idx]
+                rank_solver = solvers[rank_idx]
+                if rank_chrom is not None:
+                    rank_path = rank_solver.trace_solution(rank_chrom)
+                    visualize_solution(
+                        solver=rank_solver,
+                        best_chrom=rank_chrom,
+                        path_details=rank_path,
+                        vr_idx=vr_idx,
+                        method_label=rank_label,
+                        animate=True,
+                        save_path=f"vne_vr{vr_idx + 1}_n{n_nodes}.png",
+                    )
+            """
+            # ---------------------------------------------------------------
             # EXCEL KAYIT
             # ---------------------------------------------------------------
             kaydet_excel(wb, greedy_sonuclar, greedy_solvers, sonuclar, solvers, vr_fname,
@@ -646,13 +669,14 @@ def main():
             # ---------------------------------------------------------------
             # TUM NESILLER BOYUNCA KROMOZU CESITLILIGI
             # ---------------------------------------------------------------
+            """"
             print(f"\n{'=' * 70}")
             print("  TUM NESILLER BOYUNCA KROMOZU CESITLILIGI")
             print(f"{'=' * 70}")
 
             for (label, _, _), solver in zip(METHODS, solvers):
                 yazNesil_Kromozomlar(solver, label, GA_POPULATION)
-
+            """
             # """ciz_fitness_egrisi(solvers, [label for label, _, _ in METHODS], vr_idx)"""
 
         print(f"\nKullanilan Intra Topolojiler (n={n_nodes}, {len(intraNameList)} domain):")

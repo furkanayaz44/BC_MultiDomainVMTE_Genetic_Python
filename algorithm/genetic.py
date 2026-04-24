@@ -525,7 +525,7 @@ class GeneticDomainSolver:
                             interDomainPathList[step], currentEdge, domainicihedefdugum,
                             required_bw, intra_res
                         )
-                        totalHops += hops
+                        totalHops += hops + 1   # +1: edge router domain geçiş hopu
                     else:
                         # Edge router: önce BC transaction dene, bulamazsan topoloji
                         t, numOfHops = self._find_bc_residual(
@@ -701,6 +701,12 @@ class GeneticDomainSolver:
                             'yol': path,
                             'hop': hops,
                             'bw_talebi': required_bw
+                        })
+                        link['segmentler'].append({
+                            'tip': 'domain gecisi',
+                            'kaynak_domain': interDomainPathList[step],
+                            'hedef_domain': nextDomain,
+                            'hop': 1
                         })
                     else:
                         # Edge router → BC transaction dene, bulamazsan topoloji fallback
