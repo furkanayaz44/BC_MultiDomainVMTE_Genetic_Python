@@ -10,7 +10,11 @@ from readFiles.IntraNetworkReader import IntraNetworkReader
 from readFiles.TransactionReader import TransactionReader
 
 from algorithm.genetic import GeneticDomainSolver
-from algorithm.centrality import CentralityGreedySolver, GreedyCPUSolver
+from algorithm.centrality import (
+    CentralityGreedySolver, GreedyCPUSolver, GreedyCPUBWSolver,
+    GreedyBWSortSolver, GreedyDegreeSortSolver,
+    CentralityBWSortSolver, CentralityDegreeSortSolver,
+)
 from visualize import visualize_solution
 
 
@@ -62,9 +66,9 @@ class TrackingGeneticSolver(GeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "yeni/USNET"
+networkType = "yeni/NSFNET"
 folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [5,8,10]  # her değer için bağımsız çalışma
+INTRA_NODE_COUNTS = [5]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
 
 GA_POPULATION  = 100
@@ -194,19 +198,39 @@ def yazYolDetaylari(yol_detaylari: list):
 
 # Algoritma etiketi → Excel sütun öneki
 KISA_AD = {
-    "cpu":              "CPU",
-    "roulette":         "Rulet",
-    "rank":             "Rank",
-    "softmax":          "Softmax",
-    "qlearning":        "QL",
-    "greedy_cpu":       "GreedyCPU",
-    "greedy_closeness": "GreedyClose",
+    "cpu":                  "CPU",
+    "roulette":             "Rulet",
+    "rank":                 "Rank",
+    "softmax":              "Softmax",
+    "qlearning":            "QL",
+    "greedy_cpu":           "GreedyCPU",
+    "greedy_cpubw":         "GreedyCPUBW",
+    "greedy_bwsort":        "GreedyBWSort",
+    "greedy_degsort":       "GreedyDegSort",
+    "greedy_closeness":     "GreedyClose",
+    "greedy_close_bwsort":  "GreedyCloseBW",
+    "greedy_close_degsort": "GreedyCloseDeg",
+    "greedy_betweenness":   "GreedyBetween",
+    "greedy_degree":        "GreedyDeg",
+    "greedy_pagerank":      "GreedyPR",
+    "greedy_eigenvector":   "GreedyEigen",
 }
-
+                                                        
 # Tek-geçişli greedy yöntemler: (etiket, excel_key, sınıf, centrality_method|None)
 GREEDY_METHODS = [
-    ("Greedy CPU",       "greedy_cpu",       GreedyCPUSolver,        None),
-    ("Greedy Closeness", "greedy_closeness", CentralityGreedySolver, "closeness"),
+    # --- Normal greedy ---
+    ("Greedy CPU",           "greedy_cpu",           GreedyCPUSolver,            None),
+    ("Greedy CPU+BW",        "greedy_cpubw",         GreedyCPUBWSolver,          None),
+    ("Greedy BW-Sort",       "greedy_bwsort",        GreedyBWSortSolver,         None),
+    ("Greedy Deg-Sort",      "greedy_degsort",       GreedyDegreeSortSolver,     None),
+    # --- Centrality greedy ---
+    ("Greedy Closeness",     "greedy_closeness",     CentralityGreedySolver,     "closeness"),
+    ("Greedy Close+BW-Sort", "greedy_close_bwsort",  CentralityBWSortSolver,     "closeness"),
+    ("Greedy Close+Deg-Sort","greedy_close_degsort", CentralityDegreeSortSolver, "closeness"),
+    # ("Greedy Betweenness", "greedy_betweenness",   CentralityGreedySolver,     "betweenness"),
+    # ("Greedy Degree",      "greedy_degree",        CentralityGreedySolver,     "degree"),
+    # ("Greedy PageRank",    "greedy_pagerank",      CentralityGreedySolver,     "pagerank"),
+    # ("Greedy Eigenvector", "greedy_eigenvector",   CentralityGreedySolver,     "eigenvector"),
 ]
 
 

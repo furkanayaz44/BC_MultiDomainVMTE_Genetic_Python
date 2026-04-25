@@ -5,7 +5,11 @@ Kullanım: main_v4.py'den visualize_solution() çağrılır.
 
 import math
 import matplotlib
-matplotlib.use('TkAgg')
+try:
+    import tkinter  # once tkinter var mi kontrol et
+    matplotlib.use('TkAgg')
+except ImportError:
+    matplotlib.use('Agg')  # headless ortam (WSL2 terminal, sunucu)
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.animation as animation

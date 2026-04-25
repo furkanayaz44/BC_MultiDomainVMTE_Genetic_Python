@@ -4,7 +4,10 @@
       "Bash(python -c ' *)",
       "Bash(python main_v4.py)",
       "Bash(python -c \"from algorithm.genetic_delay import GeneticDelaySolver, GreedyCPUDelaySolver, CentralityDelayGreedySolver; print\\('Import OK'\\)\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(python -c \"from algorithm.centrality import GreedyBWSortSolver, GreedyDegreeSortSolver; print\\('OK'\\)\")",
+      "Bash(python -c \"import main_v4; print\\('OK'\\)\")",
+      "Bash(python -c \"import algorithm.genetic_paralel; print\\('genetic_paralel OK'\\)\")"
     ]
   }
 }
