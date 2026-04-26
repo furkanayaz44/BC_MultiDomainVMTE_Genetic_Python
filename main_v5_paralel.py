@@ -19,7 +19,6 @@ from algorithm.centrality import (
     GreedyBWSortSolver, GreedyDegreeSortSolver,
     CentralityBWSortSolver, CentralityDegreeSortSolver,
 )
-from visualize import visualize_solution
 
 
 # -----------------------------------------------------------------------
