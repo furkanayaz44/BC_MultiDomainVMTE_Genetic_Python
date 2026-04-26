@@ -66,7 +66,7 @@ class TrackingGeneticSolver(GeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "yeni/NSFNET"
+networkType = "yeni/USNET"
 folder      = f"topologies/{networkType}"
 INTRA_NODE_COUNTS = [5]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
@@ -662,27 +662,25 @@ def main():
                 print(f"  {label:<40} {fit_str:>10}  {t:>7}  {u:>9}  {oran:>6}{marker}  {chrom_str}")
 
             # ---------------------------------------------------------------
-            # GÖRSELLEŞTIRME — Rank yönteminin en iyi çözümü
+            # GÖRSELLEŞTIRME — Greedy CPU yönteminin en iyi çözümü
             # ---------------------------------------------------------------
-            """
-            rank_idx = next(
-                (i for i, (_, mode, _) in enumerate(METHODS) if mode == 'rank'), None
+            greedy_cpu_idx = next(
+                (i for i, (_, key, _, _) in enumerate(GREEDY_METHODS) if key == 'greedy_close_degsort'), None
             )
-            if rank_idx is not None:
-                rank_label, rank_chrom, _ = sonuclar[rank_idx]
-                rank_solver = solvers[rank_idx]
-                if rank_chrom is not None:
-                    rank_path = rank_solver.trace_solution(rank_chrom)
+            if greedy_cpu_idx is not None:
+                greedy_label, greedy_chrom, _ = greedy_sonuclar[greedy_cpu_idx]
+                greedy_solver = greedy_solvers[greedy_cpu_idx]
+                if greedy_chrom is not None:
+                    greedy_path = greedy_solver.trace_solution(greedy_chrom)
                     visualize_solution(
-                        solver=rank_solver,
-                        best_chrom=rank_chrom,
-                        path_details=rank_path,
+                        solver=greedy_solver,
+                        best_chrom=greedy_chrom,
+                        path_details=greedy_path,
                         vr_idx=vr_idx,
-                        method_label=rank_label,
+                        method_label=greedy_label,
                         animate=True,
                         save_path=f"vne_vr{vr_idx + 1}_n{n_nodes}.png",
                     )
-            """
             # ---------------------------------------------------------------
             # EXCEL KAYIT
             # ---------------------------------------------------------------
