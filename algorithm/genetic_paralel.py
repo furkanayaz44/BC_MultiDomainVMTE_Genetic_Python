@@ -1154,9 +1154,8 @@ class GeneticDomainSolver:
 
             new_population = []
 
-            new_population.append(scored_pop[0][0])
-            if len(scored_pop) > 1:
-                new_population.append(scored_pop[1][0])
+            for i in range(min(10, len(scored_pop))):
+                new_population.append(scored_pop[i][0])
 
             while len(new_population) < population_size:
 
@@ -1258,9 +1257,9 @@ class ParallelGeneticDomainSolver(GeneticDomainSolver):
                 scored_pop.sort(key=lambda x: x[1], reverse=False)
 
                 new_population = []
-                new_population.append(scored_pop[0][0])
-                if len(scored_pop) > 1:
-                    new_population.append(scored_pop[1][0])
+
+                for i in range(min(10, len(scored_pop))):
+                    new_population.append(scored_pop[i][0])
 
                 while len(new_population) < population_size:
                     candidates = rng.sample(scored_pop, min(3, len(scored_pop)))

@@ -66,7 +66,7 @@ class TrackingGeneticSolver(GeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "yeni/USNET"
+networkType = "guncel/NSFNET"
 folder      = f"topologies/{networkType}"
 INTRA_NODE_COUNTS = [5]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma

@@ -1134,9 +1134,8 @@ class GeneticDomainSolver:
 
             new_population = []
 
-            new_population.append(scored_pop[0][0])
-            if len(scored_pop) > 1:
-                new_population.append(scored_pop[1][0])
+            for i in range(min(10, len(scored_pop))):
+                new_population.append(scored_pop[i][0])
 
             while len(new_population) < population_size:
 

@@ -73,13 +73,17 @@ class TrackingGeneticSolver(ParallelGeneticDomainSolver):
 # -----------------------------------------------------------------------
 # Ayarlar
 # -----------------------------------------------------------------------
-networkType = "yeni/NSFNET"
-folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [5]  # her değer için bağımsız çalışma
-#INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
+#cd /mnt/c/Users/HpVictus/Documents/GitHub/BC_MultiDomainVMTE_Genetic_Python
+#source ~/venv/bin/activate
+#python3 main_v4.py
 
+networkType = "guncel/NSFNET"
+folder      = f"topologies/{networkType}"
+INTRA_NODE_COUNTS = [8]  # her değer için bağımsız çalışma
+#INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
+print("bura")
 GA_POPULATION  = 100
-GA_GENERATIONS = 50
+GA_GENERATIONS = 100
 GA_MUTATION    = 0.1
 GA_SEED        = None     # None → her çalışmada farklı; int → tekrarlanabilir
 
