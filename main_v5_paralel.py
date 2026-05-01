@@ -77,9 +77,9 @@ class TrackingGeneticSolver(ParallelGeneticDomainSolver):
 #source ~/venv/bin/activate
 #python3 main_v4.py
 
-networkType = "guncel/NSFNET"
+networkType = "guncel/USNET"
 folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [10]  # her değer için bağımsız çalışma
+INTRA_NODE_COUNTS = [8]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
 print("bura")
 GA_POPULATION  = 100
