@@ -79,9 +79,8 @@ class TrackingGeneticSolver(ParallelGeneticDomainSolver):
 
 networkType = "guncel/USNET"
 folder      = f"topologies/{networkType}"
-INTRA_NODE_COUNTS = [10]  # her değer için bağımsız çalışma
+INTRA_NODE_COUNTS = [6]  # her değer için bağımsız çalışma
 #INTRA_NODE_COUNTS = [5, 6, 7, 8, 9, 10]  # her değer için bağımsız çalışma
-print("bura")
 GA_POPULATION  = 100
 GA_GENERATIONS = 100
 GA_MUTATION    = 0.1
