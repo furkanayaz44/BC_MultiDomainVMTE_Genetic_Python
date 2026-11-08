@@ -1,0 +1,2 @@
+usnet için nsfnet ait istekler çalıştırılmış.
+tekrar usnet i uygun isteklerle çalıştırdım. örnek sayısı azaldı (

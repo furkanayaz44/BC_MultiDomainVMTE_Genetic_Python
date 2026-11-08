@@ -64,10 +64,10 @@ ISP_BW_FILTER    = [10, 15]                # ISP grafiklerinde dahil edilen VBW'
 
 # --- Algoritmalar (dahili ad → görüntü adı) ---
 ALGORITHMS = {
-    "GreedyCPU":   "GreedyCPU",
-    "GreedyClose": "GreedyClose",
-    "GA_CPU":      "GA_CPU",
-    "GA_QL":       "GA_QL",
+    "GreedyCPU":   "CRG-VMTE",
+    "GreedyClose": "CAN-VMTE",
+    "GA_CPU":      "GARC-VMTE",
+    "GA_QL":       "QAG-VMTE",
 }
 COLORS  = {"GreedyCPU": "#1f77b4", "GreedyClose": "#ff7f0e",
            "GA_CPU":    "#2ca02c", "GA_QL":       "#9467bd"}
@@ -75,10 +75,11 @@ MARKERS = {"GreedyCPU": "o", "GreedyClose": "s",
            "GA_CPU":    "^", "GA_QL":       "v"}
 
 # --- Eksen başlıkları & metrik etiketleri ---
-XLABEL_VBW   = "Sanal Bağlantı BW Artışı"
-XLABEL_VNODE = "Sanal Düğüm Sayısı (VN)"
-XLABEL_ISP   = "ISP Sayısı"
+XLABEL_VBW   = "Bandwidth Demand"
+XLABEL_VNODE = "Number of Virtual Nodes"
+XLABEL_ISP   = "Number of Switches Per ISP"
 
+"""
 METRICS = {
     "accept": {"title":  "İstek Kabul Oranı (%)",
                "ylabel": "Kabul Oranı (%)"},
@@ -86,9 +87,17 @@ METRICS = {
                           "(tüm algoritmaların ortak çözdüğü istekler)"),
                "ylabel": "Ortalama Kaynak Kullanımı (BW)"},
     "hops":   {"title":  "Kabul Edilen İsteklerde Ortalama Hop Sayısı",
-               "ylabel": "Ortalama Hop Sayısı"},
+               "ylabel": "Average Path Length (APL)"},
     "delay":  {"title":  "Kabul Edilen İsteklerde Gecikme Dağılımı",
                "ylabel": "Gecikme"},
+}
+"""
+
+METRICS = {
+    "accept": {"ylabel": "Acceptance ratio (%)"},
+    "res":    {"ylabel": "Network Resource Usage"},
+    "hops":   {"ylabel": "Average Path Length"},
+    "delay":  {"ylabel": "End-to-End Path Delay"},
 }
 
 # --- Y-EKSEN PAYLAŞIMI ---
@@ -209,7 +218,7 @@ def compute_shared_ylims(aggs_list, pad=0.05):
         for _, agg in aggs.items():
             for a in ALGORITHMS:
                 vals.extend([v for v in agg[a]["res"] if v == v])
-    out["res"] = (0, max(vals) * (1 + pad)) if vals else None
+    out["res"] = (0, max(vals) * 1.025) if vals else None
     # hops (mean ± std)
     lo_vals, hi_vals = [], []
     for aggs in aggs_list:
@@ -289,6 +298,7 @@ def draw_resource_bars(ax, agg, x_values, xlabel):
     ax.set_xticks(x); ax.set_xticklabels(x_values)
     ax.set_xlabel(xlabel, fontsize=LABEL_FONT)
     ax.set_ylabel(METRICS["res"]["ylabel"], fontsize=LABEL_FONT)
+    ax.yaxis.set_major_locator(plt.MultipleLocator(100))
     ax.grid(True, axis="y", alpha=GRID_ALPHA); ax.set_axisbelow(True)
 
 
@@ -344,13 +354,15 @@ DRAW_FUNCS = {
 def make_legend_handles(metric):
     if metric == "accept":
         return None  # colorbar var
-    if metric == "delay":
-        h = [plt.Rectangle((0, 0), 1, 1, facecolor=COLORS[a], alpha=0.75,
+    if metric in ("delay", "res"):
+        alpha = 0.75 if metric == "delay" else 1.0
+        h = [plt.Rectangle((0, 0), 1, 1, facecolor=COLORS[a], alpha=alpha,
                            edgecolor="black", linewidth=0.5,
                            label=ALGORITHMS[a]) for a in ALGORITHMS]
-        h.append(plt.Line2D([0], [0], marker="D", color="black",
-                            markerfacecolor="white", markersize=7,
-                            linewidth=0, label="Ortalama"))
+        if metric == "delay":
+            h.append(plt.Line2D([0], [0], marker="D", color="black",
+                                markerfacecolor="white", markersize=7,
+                                linewidth=0, label="Ortalama"))
         return h
     return [plt.Line2D([0], [0], color=COLORS[a], marker=MARKERS[a],
                        linewidth=LINEWIDTH, markersize=MARKERSIZE,
@@ -361,15 +373,15 @@ def make_legend_handles(metric):
 # BİREYSEL FİGÜR ÜRETİCİ
 # =============================================================================
 
-def plot_individual(metric, agg, x_values, xlabel, subtitle, out_basename, out_dir):
+def plot_individual(metric, agg, x_values, xlabel, _subtitle, out_basename, out_dir):
     fig, ax = plt.subplots(figsize=FIG_SIZE)
     DRAW_FUNCS[metric](ax, agg, x_values, xlabel)
-    ax.set_title(f"{METRICS[metric]['title']}\n({subtitle})", fontsize=TITLE_FONT)
+    # ax.set_title(f"{METRICS[metric]['title']}\n({subtitle})", fontsize=TITLE_FONT)
     if metric != "accept" and YLIMS.get(metric) is not None:
         ax.set_ylim(YLIMS[metric])
     handles = make_legend_handles(metric)
     if handles is not None:
-        ax.legend(handles=handles, loc="best", fontsize=LEGEND_FONT)
+        ax.legend(handles=handles, loc="upper left", fontsize=LEGEND_FONT)
     fig.tight_layout()
     if SAVE_PNG:
         fig.savefig(os.path.join(out_dir, out_basename + ".png"),
@@ -423,9 +435,9 @@ def generate_combined_figure(dataset_name, aggs, out_dir):
     nrows, ncols = len(METRIC_ORDER), len(COMBINED_COLUMNS)
     fig, axes = plt.subplots(nrows, ncols, figsize=COMBINED_FIG_SIZE)
 
-    for j, col in enumerate(COMBINED_COLUMNS):
-        axes[0, j].set_title(col["subtitle"], fontsize=COL_TITLE_FONT,
-                             fontweight="bold", pad=12)
+    # for j, col in enumerate(COMBINED_COLUMNS):
+    #     axes[0, j].set_title(col["subtitle"], fontsize=COL_TITLE_FONT,
+    #                          fontweight="bold", pad=12)
 
     for i, metric in enumerate(METRIC_ORDER):
         for j, col in enumerate(COMBINED_COLUMNS):
@@ -447,7 +459,7 @@ def generate_combined_figure(dataset_name, aggs, out_dir):
                 ax.set_ylabel("")
 
     for i, metric in enumerate(METRIC_ORDER):
-        label = METRICS[metric]["title"].split("\n")[0]
+        label = METRICS[metric].get("title", METRICS[metric]["ylabel"]).split("\n")[0]
         axes[i, 0].annotate(label, xy=(-0.30, 0.5),
                             xycoords="axes fraction",
                             ha="center", va="center", rotation=90,
@@ -467,8 +479,8 @@ def generate_combined_figure(dataset_name, aggs, out_dir):
         cb = fig.colorbar(heatmap_im, cax=cax)
         cb.set_label("Kabul Oranı (%)", fontsize=10)
 
-    fig.suptitle(f"{dataset_name} — Tüm Sonuçlar (4 metrik × 3 eksen)",
-                 fontsize=SUPTITLE_FONT, fontweight="bold", y=0.995)
+    # fig.suptitle(f"{dataset_name} — Tüm Sonuçlar (4 metrik × 3 eksen)",
+    #              fontsize=SUPTITLE_FONT, fontweight="bold", y=0.995)
     fig.tight_layout(rect=[0.03, 0.02, 0.96, 0.985])
 
     base = os.path.join(out_dir, f"combined_{dataset_name}_4x3")
