@@ -1,0 +1,587 @@
+"""
+NSF + USnet Sonuç Görselleştirici v3  (makale formatı)
+======================================================
+plot_results_v2.py'nin kopyası; çizim stili birebir aynıdır. Farklar:
+    • USNET girdisi yeni 600 isteklik sonuçlar (kopya 1-20); NSFNET mevcut
+      3000 isteklik sonuçlar.
+    • Her figür iki istek kümesi için ayrı ayrı üretilir; küme adı dosya
+      adında yer alır:
+        ortak : Ağ kaynak kullanımı, yol uzunluğu ve gecikme yalnızca dört
+                algoritmanın da kabul ettiği istekler üzerinden.
+        kendi : Ağ kaynak kullanımı, yol uzunluğu ve gecikme her algoritmanın
+                kendi kabul ettiği istekler üzerinden.
+      Kabul oranı her iki kümede de tüm isteklere göre hesaplanır (aynıdır).
+      (v2'de kaynak kullanımı ortak, yol uzunluğu ve gecikme kendi kümeyle
+      hesaplanıyordu.)
+    • Y-eksenleri iki küme ve iki ağ arasında ortaktır; figürler doğrudan
+      karşılaştırılabilir.
+    • Doğrulama xlsx'lerinde her noktanın örnek sayısı (N) da yazılır.
+
+Klasör yapısı:
+    figurcizme_v3/
+    ├── plot_results_v3.py     ← bu dosya
+    ├── inputs/
+    │   ├── sonuclar_NFS_guncel_isp{5..10}_3000req_delay.xlsx
+    │   └── sonuclar_US_guncel_isp{5..10}_600req_delay.xlsx
+    └── outputs_v3/            ← script otomatik oluşturur
+
+Çalıştırma:
+    python plot_results_v3.py
+
+Üretilen çıktılar (KUME = ortak | kendi):
+    outputs_v3/KUME/nsf/       → fig_{ISP,VBW,VNode}_{metrik}_KUME (PNG + PDF)
+                                 + aggregated_{ISP,VBW,VNode}_KUME.xlsx
+    outputs_v3/KUME/usnet/     → aynı
+    outputs_v3/KUME/combined/  → fig_results_{ISP,VBW,VNode}_KUME (2×4)
+      Her birleşik figürde üst satır NSFNET, alt satır USNET; soldan sağa
+      Network Resource Usage, Average Path Length, End-to-End Path Delay,
+      Acceptance Rate.
+
+v2'nin v1'e göre farkları:
+
+v1'e göre farklar:
+    • Figürlerde Türkçe metin yok.
+    • Delay y-ekseni whisker uçlarını da kapsar (v1'de %1-%99 dilimi kesiyordu).
+    • Birleşik figürlerde legend eksenlerin dışında; bireysel delay ve hops
+      figürlerinde y-ekseni legend'a yer açacak şekilde üstten uzatılır.
+    • Isı haritası dışındaki tüm çizimlerde algoritma renkleri aynı.
+    • Fontlar büyütüldü.
+    • 4×3 birleşik figür yerine bölüm başına 2×4 birleşik figür üretilir.
+
+Tüm figürlerde NSF & USnet ortak y-ekseni + ortak heatmap renk skalası kullanılır
+(SHARE_Y_AXIS=True iken).
+"""
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.cbook import boxplot_stats
+
+# PDF'e fontlar Type 42 olarak gömülsün (dergi sistemleri Type 3 font istemez)
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["ps.fonttype"]  = 42
+
+# =============================================================================
+# KONFİGÜRASYON
+# =============================================================================
+
+# --- Klasörler (script'in bulunduğu dizine göre göreceli) ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_DIR  = os.path.join(SCRIPT_DIR, "inputs")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs_v3")
+SHEET_NAME = "Sonuclar"
+
+# --- Hangi çıktılar üretilsin? ---
+GENERATE_INDIVIDUAL = True   # 24 bireysel figür (12 NSF + 12 USnet)
+GENERATE_SECTIONS   = True   # 3 birleşik 2×4 figür (makalenin her alt bölümü için 1)
+
+# --- Veri setleri (dosya adı deseni: {isp} ISP numarasıyla değiştirilir) ---
+DATASETS = {
+    "NSF":   {"pattern": "sonuclar_NFS_guncel_isp{isp}_3000req_delay.xlsx",
+              "ind_subdir": "nsf",
+              "row_label": "NSFNET"},
+    "USnet": {"pattern": "sonuclar_US_guncel_isp{isp}_600req_delay.xlsx",
+              "ind_subdir": "usnet",
+              "row_label": "USNET"},
+}
+
+# --- İstek kümeleri: res / hops / delay hangi istekler üzerinden hesaplanır ---
+REQUEST_SETS = {
+    "ortak": "dört algoritmanın da kabul ettiği istekler",
+    "kendi": "her algoritmanın kendi kabul ettiği istekler",
+}
+
+# --- Deney parametreleri ---
+ISPS_FOR_VBW_VN  = [6, 7, 8]               # VBW & VNode grafiklerinde kullanılan ISP'ler
+VBW_VALUES       = [5, 10, 15, 20, 25]
+VNODE_VALUES     = [5, 6, 7, 8, 9, 10]
+ISP_AXIS_VALUES  = [5, 6, 7, 8, 9, 10]
+ISP_VN_FILTER    = [6, 7, 8]               # ISP grafiklerinde dahil edilen VNode'lar
+ISP_BW_FILTER    = [10, 15]                # ISP grafiklerinde dahil edilen VBW'ler
+
+# --- Algoritmalar (dahili ad → görüntü adı) ---
+ALGORITHMS = {
+    "GreedyCPU":   "CRG-VMTE",
+    "GreedyClose": "CAN-VMTE",
+    "GA_CPU":      "GARC-VMTE",
+    "GA_QL":       "QAG-VMTE",
+}
+# v1 delay kutularının görünümü (temel renk, %75 opaklık, beyaz zemin)
+COLORS  = {"GreedyCPU": "#5799c7", "GreedyClose": "#ff9f4a",
+           "GA_CPU":    "#61b861", "GA_QL":       "#af8dce"}
+MARKERS = {"GreedyCPU": "o", "GreedyClose": "s",
+           "GA_CPU":    "^", "GA_QL":       "v"}
+
+# --- Eksen başlıkları & metrik etiketleri ---
+XLABEL_VBW   = "Bandwidth Demand"
+XLABEL_VNODE = "Number of Virtual Nodes"
+XLABEL_ISP   = "Number of Switches Per ISP"
+
+METRICS = {
+    "accept": {"ylabel": "Acceptance Rate (%)"},
+    "res":    {"ylabel": "Network Resource Usage"},
+    "hops":   {"ylabel": "Average Path Length"},
+    "delay":  {"ylabel": "End-to-End Path Delay"},
+}
+
+# --- Y-EKSEN PAYLAŞIMI ---
+SHARE_Y_AXIS = True   # NSF & USnet, aynı metrik için aynı y-aralığını paylaşır
+YLIMS = {             # Manuel limit; SHARE_Y_AXIS=True iken otomatik doldurulur
+    "accept": None,   # (vmin, vmax) — heatmap renk skalası için
+    "res":    None,
+    "hops":   None,
+    "delay":  None,
+}
+
+# --- Stil ---
+FIG_SIZE     = (8, 5.5)
+DPI          = 150
+GRID_ALPHA   = 0.3
+HEATMAP_CMAP = "RdYlGn"
+BAND_ALPHA   = 0.18
+BAR_WIDTH    = 0.18
+BOX_WIDTH    = 0.2
+SAVE_PNG    = True
+SAVE_PDF     = True
+
+INDIVIDUAL_STYLE = {"label": 15, "tick": 13, "legend": 13, "annot": 13,
+                    "linewidth": 2, "markersize": 7, "box_line": 0.6,
+                    "median_line": 1.2, "mean_size": 18, "mean_edge": 0.6}
+INDIVIDUAL_HEADROOM = {"delay": 1.12, "hops": 1.05}   # bireysel figür: legend için üstte boşluk
+
+# Birleşik 2×4 figür: makalede \textwidth'e (~7.2 in) sığdırılınca yaklaşık 0.40
+# oranında küçülür; yani 20 pt font sayfada ~8 pt görünür.
+SECTION_FIG_SIZE = (18, 10)
+SECTION_DPI      = 300
+SECTION_WIDTHS   = [1, 1, 1, 1.25]   # heatmap sütunu: hücrelere "100" sığsın
+SECTION_WSPACE   = 0.05              # paneller arası yatay boşluk (figür oranı)
+SECTION_HSPACE   = 0.07              # satırlar arası dikey boşluk (figür oranı)
+SECTION_STYLE    = {"label": 20, "tick": 18, "legend": 21, "annot": 17,
+                    "linewidth": 2.8, "markersize": 9, "box_line": 1.0,
+                    "median_line": 2.0, "mean_size": 16, "mean_edge": 0.8}
+ROW_LABEL_FONT   = 23
+XLABEL_FONT      = 23
+
+
+# =============================================================================
+# VERİ ANALİZİ
+# =============================================================================
+
+def load_isp_file(input_pattern, isp):
+    path = os.path.join(INPUT_DIR, input_pattern.format(isp=isp))
+    df = pd.read_excel(path, sheet_name=SHEET_NAME)
+    for algo in ALGORITHMS:
+        df[f"{algo}_acc"]  = pd.to_numeric(df[f"{algo}_BW"],        errors="coerce").notna()
+        df[f"{algo}_BW_n"] = pd.to_numeric(df[f"{algo}_BW"],        errors="coerce")
+        df[f"{algo}_Hp_n"] = pd.to_numeric(df[f"{algo}_NumofHops"], errors="coerce")
+        df[f"{algo}_Dl_n"] = pd.to_numeric(df[f"{algo}_Delay"],     errors="coerce")
+    common = np.ones(len(df), dtype=bool)
+    for algo in ALGORITHMS:
+        common &= df[f"{algo}_acc"].values
+    df["_common"] = common
+    return df
+
+
+def aggregate_full(df, group_col, x_values, req_set):
+    """Çizim için tüm gerekli istatistikleri toplar (mean, std, ham örnek).
+
+    req_set="ortak": res, hops, delay dört algoritmanın da kabul ettiği isteklerden.
+    req_set="kendi": res, hops, delay algoritmanın kendi kabul ettiği isteklerden.
+    accept her zaman tüm isteklere göredir.
+    """
+    agg = {a: {"accept": [], "res": [],
+               "hops": [], "hops_std": [],
+               "delay_mean": [], "delay_samples": [], "n": []} for a in ALGORITHMS}
+    for x in x_values:
+        sub = df[df[group_col] == x]
+        dc  = sub[sub["_common"]]
+        for a in ALGORITHMS:
+            acc_mask = sub[f"{a}_acc"]
+            rows = dc if req_set == "ortak" else sub[acc_mask]
+            agg[a]["accept"].append(
+                100.0 * acc_mask.sum() / len(sub) if len(sub) else np.nan)
+            agg[a]["n"].append(len(rows))
+            agg[a]["res"].append(
+                rows[f"{a}_BW_n"].mean() if len(rows) else np.nan)
+            hops = rows[f"{a}_Hp_n"].dropna()
+            agg[a]["hops"].append(hops.mean() if len(hops) else np.nan)
+            agg[a]["hops_std"].append(hops.std() if len(hops) > 1 else 0.0)
+            dly = rows[f"{a}_Dl_n"].dropna().values
+            agg[a]["delay_mean"].append(dly.mean() if len(dly) else np.nan)
+            agg[a]["delay_samples"].append(dly)
+    return agg
+
+
+def build_dataset_aggregates(pattern, req_set):
+    """Bir veri seti için 3 x-ekseni (VBW, VNode, ISP) aggregate'lerini döndürür."""
+    # VBW & VNode: ISP 6-7-8 birleşik
+    frames = []
+    for isp in ISPS_FOR_VBW_VN:
+        d = load_isp_file(pattern, isp); d["ISP"] = isp
+        frames.append(d)
+    df_pool = pd.concat(frames, ignore_index=True)
+    aggs = {
+        "VBW":   aggregate_full(df_pool, "VBW",   VBW_VALUES,   req_set),
+        "VNode": aggregate_full(df_pool, "VNode", VNODE_VALUES, req_set),
+    }
+    # ISP: tüm ISP'ler + filtre
+    rows = []
+    for isp in ISP_AXIS_VALUES:
+        d = load_isp_file(pattern, isp); d["ISP"] = isp
+        d = d[d["VNode"].isin(ISP_VN_FILTER) & d["VBW"].isin(ISP_BW_FILTER)]
+        rows.append(d)
+    df_isp = pd.concat(rows, ignore_index=True)
+    aggs["ISP"] = aggregate_full(df_isp, "ISP", ISP_AXIS_VALUES, req_set)
+    return aggs
+
+
+def compute_shared_ylims(aggs_list, pad=0.05):
+    """Birden çok veri setinden her metrik için ortak (ymin, ymax) hesaplar."""
+    out = {}
+    # accept (heatmap renk skalası)
+    accept_vals = []
+    for aggs in aggs_list:
+        for _, agg in aggs.items():
+            for a in ALGORITHMS:
+                accept_vals.extend([v for v in agg[a]["accept"] if v == v])
+    if accept_vals:
+        amin = max(0, np.floor(min(accept_vals) / 5) * 5)
+        amax = min(100, np.ceil(max(accept_vals) / 5) * 5)
+        out["accept"] = (amin, amax)
+    # res
+    vals = []
+    for aggs in aggs_list:
+        for _, agg in aggs.items():
+            for a in ALGORITHMS:
+                vals.extend([v for v in agg[a]["res"] if v == v])
+    out["res"] = (0, max(vals) * 1.025) if vals else None
+    # hops (mean ± std)
+    lo_vals, hi_vals = [], []
+    for aggs in aggs_list:
+        for _, agg in aggs.items():
+            for a in ALGORITHMS:
+                mean = np.array(agg[a]["hops"], dtype=float)
+                std  = np.array(agg[a]["hops_std"], dtype=float)
+                lo_vals.extend([v for v in (mean - std) if v == v])
+                hi_vals.extend([v for v in (mean + std) if v == v])
+    if hi_vals:
+        lo = max(0, min(lo_vals) * (1 - pad)) if min(lo_vals) > 0 else 0
+        out["hops"] = (lo, max(hi_vals) * (1 + pad))
+    # delay (tüm box-plot whisker uçları sığacak şekilde)
+    whisker_hi = []
+    for aggs in aggs_list:
+        for _, agg in aggs.items():
+            for a in ALGORITHMS:
+                for arr in agg[a]["delay_samples"]:
+                    if len(arr):
+                        whisker_hi.append(boxplot_stats(arr)[0]["whishi"])
+    if whisker_hi:
+        out["delay"] = (0, max(whisker_hi) * (1 + pad))
+    return out
+
+
+def export_aggregate_xlsx(aggs, axis_key, x_values, x_label_col, out_path):
+    """Skalar değerleri xlsx olarak yaz (doğrulama)."""
+    with pd.ExcelWriter(out_path) as w:
+        for metric in METRICS:
+            field = {"accept": "accept", "res": "res",
+                     "hops": "hops",   "delay": "delay_mean"}[metric]
+            rows = []
+            for a in ALGORITHMS:
+                for i, x in enumerate(x_values):
+                    # N: kabul oranı için gruptaki tüm istekler değil, res/hops/delay
+                    # ortalamasına giren istek sayısıdır
+                    rows.append({"Algoritma": a, x_label_col: x,
+                                 "Değer": aggs[axis_key][a][field][i],
+                                 "N": aggs[axis_key][a]["n"][i]})
+            pd.DataFrame(rows).to_excel(w, sheet_name=metric, index=False)
+
+
+# =============================================================================
+# ÇİZİM FONKSİYONLARI (her metrik için; verilen ax üzerine çizer)
+# =============================================================================
+
+def draw_accept_heatmap(ax, agg, x_values, xlabel, style, *, add_colorbar=True):
+    mat = np.array([agg[a]["accept"] for a in ALGORITHMS])
+    if YLIMS.get("accept") is not None:
+        vmin, vmax = YLIMS["accept"]
+    else:
+        vmin, vmax = 0, 100
+    im = ax.imshow(mat, aspect="auto", cmap=HEATMAP_CMAP, vmin=vmin, vmax=vmax)
+    ax.set_xticks(range(len(x_values))); ax.set_xticklabels(x_values)
+    ax.set_yticks(range(len(ALGORITHMS)))
+    ax.set_yticklabels([ALGORITHMS[a] for a in ALGORITHMS])
+    ax.set_xlabel(xlabel, fontsize=style["label"])
+    ax.tick_params(labelsize=style["tick"])
+    span = max(vmax - vmin, 1e-9)
+    for (i, j), v in np.ndenumerate(mat):
+        if np.isnan(v): continue
+        norm = (v - vmin) / span
+        color = "white" if (norm < 0.25 or norm > 0.85) else "black"
+        ax.text(j, i, f"{v:.0f}", ha="center", va="center",
+                fontsize=style["annot"], color=color)
+    if add_colorbar:
+        add_accept_colorbar(ax.figure, im, ax, style)
+    return im
+
+
+def add_accept_colorbar(fig, im, ax, style, **kwargs):
+    cb = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02, **kwargs)
+    cb.set_label(METRICS["accept"]["ylabel"], fontsize=style["label"])
+    cb.ax.tick_params(labelsize=style["tick"])
+
+
+def draw_resource_bars(ax, agg, x_values, xlabel, style):
+    x = np.arange(len(x_values)); n = len(ALGORITHMS)
+    for k, a in enumerate(ALGORITHMS):
+        offset = (k - (n - 1) / 2) * BAR_WIDTH
+        ax.bar(x + offset, agg[a]["res"], width=BAR_WIDTH,
+               color=COLORS[a], label=ALGORITHMS[a],
+               edgecolor="black", linewidth=0.3)
+    ax.set_xticks(x); ax.set_xticklabels(x_values)
+    ax.set_xlabel(xlabel, fontsize=style["label"])
+    ax.set_ylabel(METRICS["res"]["ylabel"], fontsize=style["label"])
+    ax.yaxis.set_major_locator(plt.MultipleLocator(200))
+    ax.tick_params(labelsize=style["tick"])
+    ax.grid(True, axis="y", alpha=GRID_ALPHA); ax.set_axisbelow(True)
+
+
+def draw_hops_confband(ax, agg, x_values, xlabel, style):
+    xv = np.array(x_values, dtype=float)
+    for a in ALGORITHMS:
+        mean = np.array(agg[a]["hops"],     dtype=float)
+        std  = np.array(agg[a]["hops_std"], dtype=float)
+        ax.fill_between(xv, mean - std, mean + std,
+                        color=COLORS[a], alpha=BAND_ALPHA, linewidth=0)
+        ax.plot(xv, mean, color=COLORS[a], marker=MARKERS[a],
+                linewidth=style["linewidth"], markersize=style["markersize"],
+                label=ALGORITHMS[a])
+    ax.set_xticks(x_values)
+    ax.set_xlabel(xlabel, fontsize=style["label"])
+    ax.set_ylabel(METRICS["hops"]["ylabel"], fontsize=style["label"])
+    ax.tick_params(labelsize=style["tick"])
+    ax.grid(True, alpha=GRID_ALPHA); ax.set_axisbelow(True)
+
+
+def draw_delay_box(ax, agg, x_values, xlabel, style):
+    x = np.arange(len(x_values)); n = len(ALGORITHMS)
+    for k, a in enumerate(ALGORITHMS):
+        offset = (k - (n - 1) / 2) * BOX_WIDTH
+        positions = x + offset
+        data = agg[a]["delay_samples"]
+        safe = [d if len(d) else np.array([np.nan]) for d in data]
+        ax.boxplot(
+            safe, positions=positions, widths=BOX_WIDTH * 0.85,
+            patch_artist=True, showfliers=False,
+            boxprops=dict(facecolor=COLORS[a], linewidth=style["box_line"]),
+            medianprops=dict(color="black", linewidth=style["median_line"]),
+            whiskerprops=dict(linewidth=style["box_line"]),
+            capprops=dict(linewidth=style["box_line"]),
+        )
+        means = [d.mean() if len(d) else np.nan for d in data]
+        ax.scatter(positions, means, marker="D", s=style["mean_size"],
+                   color="white", edgecolor="black",
+                   linewidth=style["mean_edge"], zorder=5)
+    ax.set_xticks(x); ax.set_xticklabels(x_values)
+    ax.set_xlim(-0.5, len(x_values) - 0.5)
+    ax.set_xlabel(xlabel, fontsize=style["label"])
+    ax.set_ylabel(METRICS["delay"]["ylabel"], fontsize=style["label"])
+    ax.tick_params(labelsize=style["tick"])
+    ax.grid(True, axis="y", alpha=GRID_ALPHA); ax.set_axisbelow(True)
+
+
+DRAW_FUNCS = {
+    "accept": draw_accept_heatmap,
+    "res":    draw_resource_bars,
+    "hops":   draw_hops_confband,
+    "delay":  draw_delay_box,
+}
+
+
+def mean_legend_handle():
+    return plt.Line2D([0], [0], marker="D", color="black",
+                      markerfacecolor="white", markersize=7,
+                      linewidth=0, label="Mean")
+
+
+def make_legend_handles(metric, style):
+    if metric == "accept":
+        return None  # colorbar var
+    if metric in ("delay", "res"):
+        h = [plt.Rectangle((0, 0), 1, 1, facecolor=COLORS[a],
+                           edgecolor="black", linewidth=0.5,
+                           label=ALGORITHMS[a]) for a in ALGORITHMS]
+        if metric == "delay":
+            h.append(mean_legend_handle())
+        return h
+    return [plt.Line2D([0], [0], color=COLORS[a], marker=MARKERS[a],
+                       linewidth=style["linewidth"], markersize=style["markersize"],
+                       label=ALGORITHMS[a]) for a in ALGORITHMS]
+
+
+# =============================================================================
+# BİREYSEL FİGÜR ÜRETİCİ
+# =============================================================================
+
+def plot_individual(metric, agg, x_values, xlabel, out_basename, out_dir):
+    style = INDIVIDUAL_STYLE
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    DRAW_FUNCS[metric](ax, agg, x_values, xlabel, style)
+    if metric != "accept" and YLIMS.get(metric) is not None:
+        ymin, ymax = YLIMS[metric]
+        ax.set_ylim(ymin, ymax * INDIVIDUAL_HEADROOM.get(metric, 1.0))
+    handles = make_legend_handles(metric, style)
+    if handles is not None:
+        ax.legend(handles=handles, loc="upper left", fontsize=style["legend"],
+                  ncol=2 if metric == "delay" else 1)
+    fig.tight_layout()
+    if SAVE_PNG:
+        fig.savefig(os.path.join(out_dir, out_basename + ".png"),
+                    dpi=DPI, bbox_inches="tight")
+    if SAVE_PDF:
+        fig.savefig(os.path.join(out_dir, out_basename + ".pdf"),
+                    bbox_inches="tight")
+    plt.close(fig)
+
+
+def generate_individual_figures(dataset_name, aggs, out_dir, req_set):
+    os.makedirs(out_dir, exist_ok=True)
+    for section in SECTIONS:
+        for metric in METRICS:
+            plot_individual(metric, aggs[section["key"]],
+                            section["values"], section["xlabel"],
+                            out_basename=f"fig_{section['key']}_{metric}_{req_set}",
+                            out_dir=out_dir)
+    # Doğrulama xlsx'leri
+    for section in SECTIONS:
+        key = section["key"]
+        export_aggregate_xlsx(aggs, key, section["values"], key,
+                              os.path.join(out_dir, f"aggregated_{key}_{req_set}.xlsx"))
+    print(f"  OK {dataset_name} bireysel ({req_set}): {out_dir}")
+
+
+# =============================================================================
+# BİRLEŞİK 2×4 FİGÜR ÜRETİCİ (makalenin her alt bölümü için 1 figür)
+# =============================================================================
+
+SECTIONS = [
+    {"key": "ISP",   "xlabel": XLABEL_ISP,   "values": ISP_AXIS_VALUES},
+    {"key": "VBW",   "xlabel": XLABEL_VBW,   "values": VBW_VALUES},
+    {"key": "VNode", "xlabel": XLABEL_VNODE, "values": VNODE_VALUES},
+]
+METRIC_ORDER = ["res", "hops", "delay", "accept"]
+
+
+def build_section_figure(section, all_aggs):
+    style = SECTION_STYLE
+    nrows, ncols = len(DATASETS), len(METRIC_ORDER)
+    fig, axes = plt.subplots(nrows, ncols, figsize=SECTION_FIG_SIZE,
+                             width_ratios=SECTION_WIDTHS,
+                             layout="constrained")
+    fig.get_layout_engine().set(wspace=SECTION_WSPACE, hspace=SECTION_HSPACE)
+
+    for i, (name, cfg) in enumerate(DATASETS.items()):
+        agg = all_aggs[name][section["key"]]
+        for j, metric in enumerate(METRIC_ORDER):
+            ax = axes[i, j]
+            if metric == "accept":
+                draw_accept_heatmap(ax, agg, section["values"], "", style,
+                                    add_colorbar=False)
+            else:
+                DRAW_FUNCS[metric](ax, agg, section["values"], "", style)
+                if YLIMS.get(metric) is not None:
+                    ax.set_ylim(YLIMS[metric])
+        axes[i, 0].annotate(cfg["row_label"], xy=(0, 0.5),
+                            xycoords="axes fraction",
+                            # v2'de -82; USNET kaynak ekseni 1000'i aştığı için
+                            # dört basamaklı tick'ler eksen başlığını sola itiyor
+                            xytext=(-102, 0), textcoords="offset points",
+                            ha="center", va="center", rotation=90,
+                            fontsize=ROW_LABEL_FONT, fontweight="bold")
+
+    # Tek colorbar: iki satırdaki heatmap'ler aynı renk skalasını paylaşır
+    add_accept_colorbar(fig, axes[0, -1].images[0], axes[:, -1], style, aspect=40)
+
+    # Tüm paneller aynı x-eksenini paylaşır: tek başlık, panel yazıları çakışmaz
+    fig.supxlabel(section["xlabel"], fontsize=XLABEL_FONT)
+
+    legend_handles = [plt.Line2D([0], [0], color=COLORS[a], marker=MARKERS[a],
+                                 linewidth=style["linewidth"],
+                                 markersize=style["markersize"],
+                                 label=ALGORITHMS[a]) for a in ALGORITHMS]
+    legend_handles.append(mean_legend_handle())
+    fig.legend(handles=legend_handles, loc="outside upper center",
+               ncol=len(legend_handles), fontsize=style["legend"],
+               frameon=False)
+    return fig
+
+
+def generate_section_figures(all_aggs, out_dir, req_set):
+    os.makedirs(out_dir, exist_ok=True)
+    for section in SECTIONS:
+        fig = build_section_figure(section, all_aggs)
+        base = os.path.join(out_dir, f"fig_results_{section['key']}_{req_set}")
+        if SAVE_PNG:
+            fig.savefig(base + ".png", dpi=SECTION_DPI, bbox_inches="tight")
+        if SAVE_PDF:
+            fig.savefig(base + ".pdf", bbox_inches="tight")
+        plt.close(fig)
+        print(f"  OK {section['key']} birleşik 2x4: {base}.png/.pdf")
+
+
+# =============================================================================
+# ANA AKIŞ
+# =============================================================================
+
+def main():
+    global YLIMS
+
+    if not os.path.isdir(INPUT_DIR):
+        raise SystemExit(
+            f"HATA: Girdi klasörü bulunamadı: {INPUT_DIR}\n"
+            f"Excel dosyalarını '{INPUT_DIR}' altına koyun "
+            f"(ya da bu script'in tepesinden INPUT_DIR yolunu değiştirin)."
+        )
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # 1) Her istek kümesi ve veri seti için aggregate'leri topla
+    print("Veri setleri yükleniyor...")
+    set_aggs = {}
+    for req_set in REQUEST_SETS:
+        set_aggs[req_set] = {}
+        for name, cfg in DATASETS.items():
+            set_aggs[req_set][name] = build_dataset_aggregates(cfg["pattern"], req_set)
+            print(f"  - {name} ({req_set}) yüklendi")
+
+    # 2) Ortak y-aralıkları: iki ağ ve iki istek kümesi aynı ölçeği paylaşır
+    if SHARE_Y_AXIS:
+        YLIMS = compute_shared_ylims(
+            [aggs for per_set in set_aggs.values() for aggs in per_set.values()])
+        print("\nOrtak y-aralıkları (iki küme için aynı):")
+        for k, v in YLIMS.items():
+            if v is not None:
+                print(f"  {k:>6}: ({v[0]:.2f}, {v[1]:.2f})")
+
+    for req_set, desc in REQUEST_SETS.items():
+        all_aggs = set_aggs[req_set]
+        set_dir = os.path.join(OUTPUT_DIR, req_set)
+        print(f"\n=== {req_set}: res, hops, delay → {desc} ===")
+
+        # 3) Bireysel figürler
+        if GENERATE_INDIVIDUAL:
+            print("Bireysel figürler üretiliyor:")
+            for name, cfg in DATASETS.items():
+                out_dir = os.path.join(set_dir, cfg["ind_subdir"])
+                generate_individual_figures(name, all_aggs[name], out_dir, req_set)
+
+        # 4) Birleşik 2×4 figürler
+        if GENERATE_SECTIONS:
+            print("Birleşik 2x4 figürler üretiliyor:")
+            generate_section_figures(all_aggs, os.path.join(set_dir, "combined"), req_set)
+
+    print(f"\nTamamlandı. Çıktılar: {OUTPUT_DIR}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,74 @@
+% ----------------------------------------------------------------------------
+% HESAPLAMA NOTLARI (ileride hakem sorusu gelirse)
+% - Veri: figurcizme_v3/outputs_v3/ortak; NSFNET 3000 istek/olcek, USNET 600
+%   istek/olcek (kopya 1-20). Sayilar figurlerle ayni kodla hesaplandi.
+% - Kabul orani TUM istekler uzerinden hesaplanir.
+% - Ag kaynak kullanimi, ortalama yol uzunlugu ve uctan uca gecikme, dort
+%   algoritmanin da kabul ettigi ORTAK istekler uzerinden ortalanir; boylece
+%   tum algoritmalar ayni istekler uzerinde karsilastirilir.
+% - "On a per-request basis", "of the requests" gibi istek bazli yuzdeler
+%   (58--62, 58/51, 99.5, 84) da ortak istekler uzerinden, yani iki
+%   algoritmanin da cozum buldugu istekler uzerinden hesaplanmistir.
+% ----------------------------------------------------------------------------
+
+\subsection{Impact of the Number of Switches per ISP}
+\label{subsec:isp}
+
+In the first experiment, the number of switches per ISP is increased from 5 to 10, while the requests are limited to 6--8 virtual nodes and a bandwidth demand of 10 or 15. The results are shown in Fig.~\ref{fig:results_isp}.
+
+Figs.~\ref{fig:isp_nsf_res} and \ref{fig:isp_us_res} show that QAG-VMTE achieves the lowest network resource usage at all scales. Compared with CRG-VMTE, it uses 45--57\% fewer resources in NSFNET and 47--56\% fewer resources in USNET. Its advantage over GARC-VMTE is 19--30\% in both networks.
+
+As shown in Figs.~\ref{fig:isp_nsf_len} and \ref{fig:isp_us_len}, the average path length does not decrease even though more alternative paths become available as the number of switches grows. For the greedy approaches, it even tends to increase; the path length of CRG-VMTE in NSFNET grows from 32.3 with 5 switches to 41.6 with 10 switches. In contrast, the path length of QAG-VMTE remains almost constant, between 16.0 and 18.0 in NSFNET and between 23.5 and 24.8 in USNET.
+
+% NOT: 5 anahtarda NSFNET'te avantajin %29.8'e dusmesinin nedeni: bu olcekte
+% ortak kume yalnizca 314 istek (6 anahtarda 501). 5->6 gecisinde CRG-VMTE'nin
+% gecikmesi %13.9 artarken QAG-VMTE'ninki 185.3'ten 182.0'a hafifce dusuyor;
+% yani eklenen istekler CRG-VMTE icin zor, QAG-VMTE icin degil.
+Figs.~\ref{fig:isp_nsf_delay} and \ref{fig:isp_us_delay} show a similar behaviour for the end-to-end delay. Compared with CRG-VMTE, QAG-VMTE reduces the delay by 36--40\% in NSFNET from 6 switches onward and by 34--44\% in USNET. With 5 switches in NSFNET, the reduction is smaller and amounts to 29.8\%. The delay gain of QAG-VMTE over GARC-VMTE remains below 11\% at all scales.
+
+Figs.~\ref{fig:isp_nsf_acc} and \ref{fig:isp_us_acc} show that the main effect of the number of switches appears in the acceptance ratio. With 5 switches, the greedy approaches accept only about 60\% of the requests in NSFNET and 75--85\% in USNET, whereas the GA-based algorithms exceed 97\% in both networks. When the number of switches increases to 6, the number of pathlets offered by the domains grows by about 3.8 times in NSFNET and 2.3 times in USNET. Accordingly, the acceptance ratio in NSFNET rises to 87.5\% for CRG-VMTE and 93.3\% for CAN-VMTE. However, this improvement is not monotonic. In USNET, the acceptance ratio of CRG-VMTE drops from 95.8\% to 80.8\% and that of CAN-VMTE from 98.3\% to 88.3\% when the number of switches increases from 7 to 8, although the number of pathlets still grows by 13\% in this step. CAN-VMTE shows a similar drop in USNET from 5 to 6 switches (from 85.0\% to 72.5\%), and both greedy approaches decline slightly in NSFNET from 6 to 7 switches. These drops are likely caused by bottlenecks in the topology instances generated for these scales. The GA-based algorithms are not affected and QAG-VMTE accepts all requests from 6 switches onward in both networks, which indicates that a wider search space improves robustness.
+
+\subsection{Impact of the Bandwidth Demand}
+\label{subsec:vbw}
+
+In the second experiment, the bandwidth demand is increased from 5 to 25 and the results of the 6--8 switch scales are combined. The results are shown in Fig.~\ref{fig:results_vbw}.
+
+As shown in Figs.~\ref{fig:vbw_nsf_res} and \ref{fig:vbw_us_res}, the network resource usage increases almost linearly with the demand by definition. However, the advantage of QAG-VMTE grows as the demand increases. In NSFNET, its advantage over CRG-VMTE increases from 52\% to 56\% and its advantage over GARC-VMTE from 25\% to 32\%. In USNET, these advantages increase from 51\% to 55\% and from 21\% to 30\%, respectively.
+
+% NOT: Yuksek talepte (20->25) yol uzunlugu ve gecikmenin tum algoritmalarda
+% dusmesi, USNET'te kaynak kullaniminin yalnizca %3--5 artmasi (beklenen %25)
+% bir ornekleme etkisidir: ortak istek sayisi USNET'te 118'den 55'e, NSFNET'te
+% 773'ten 393'e iner; ortak isteklerin ortalama sanal dugum sayisi USNET'te
+% 6.7'den 6.0'a, NSFNET'te 7.1'den 6.5'e duser. Algoritmalar arasi goreli
+% farklar bu etkiden bagimsizdir.
+Figs.~\ref{fig:vbw_nsf_len} and \ref{fig:vbw_us_len} show that the average path length is largely independent of the bandwidth demand. It remains almost constant up to a demand of 15 and decreases slightly at higher demands, more noticeably in USNET. At every demand level, QAG-VMTE finds 52--56\% shorter paths than CRG-VMTE in NSFNET and 51--55\% shorter paths in USNET.
+
+The end-to-end delay in Figs.~\ref{fig:vbw_nsf_delay} and \ref{fig:vbw_us_delay} follows the same pattern. It is almost unchanged up to a demand of 15 and then decreases for all algorithms, by 4--9\% in NSFNET and 17--21\% in USNET from a demand of 15 to 25. The relative differences remain stable: at every demand level, QAG-VMTE reduces the delay by 36--39\% in NSFNET and 38--41\% in USNET compared with CRG-VMTE, and by 6--12\% compared with GARC-VMTE.
+
+Figs.~\ref{fig:vbw_nsf_acc} and \ref{fig:vbw_us_acc} show that all algorithms accept more than 96\% of the requests when the demand is 10 or lower, and they start to diverge at 15. At a demand of 25, the acceptance ratio of CRG-VMTE falls to 31.3\% in NSFNET and 27.5\% in USNET, while QAG-VMTE stays above 97\% in both networks and reaches 3.2 to 3.6 times the acceptance ratio of CRG-VMTE. The gap between GARC-VMTE and QAG-VMTE also peaks at this point and reaches 7.7 percentage points in NSFNET and 8.1 percentage points in USNET. This result shows that the contribution of Q-learning becomes clearer as the capacity pressure increases.
+
+\subsection{Impact of the Number of Virtual Nodes}
+\label{subsec:vnode}
+
+In the third experiment, the number of virtual nodes per request is increased from 5 to 10 and the results of the 6--8 switch scales are combined. The results are shown in Fig.~\ref{fig:results_vnode}.
+
+As shown in Figs.~\ref{fig:vnode_nsf_res} and \ref{fig:vnode_us_res}, the network resource usage grows with the size of the requests for all algorithms. Across all virtual node counts, QAG-VMTE uses 53--57\% fewer resources than CRG-VMTE in NSFNET and 50--55\% fewer resources in USNET. Its advantage over GARC-VMTE is 26--32\% in NSFNET and 21--26\% in USNET.
+
+Figs.~\ref{fig:vnode_nsf_len} and \ref{fig:vnode_us_len} show that the number of virtual nodes is the most influential parameter on the average path length. Since the number of virtual links increases from 4 to 9, the path length grows by a factor of 2.1--2.4 for all algorithms. However, the number of hops per virtual link remains almost constant. In NSFNET, it is about 2.7 for QAG-VMTE, 3.8 for GARC-VMTE and 5.4--6.0 for the greedy approaches. In USNET, these values are about 4.0, 5.2 and 7.9--8.5, respectively. Therefore, all algorithms preserve their path quality as the requests grow. The relative increase of QAG-VMTE is the largest only because of its very low initial value.
+
+The end-to-end delay in Figs.~\ref{fig:vnode_nsf_delay} and \ref{fig:vnode_us_delay} increases more slowly than the path length, by a factor of 1.5--1.7 from 5 to 10 virtual nodes. This is because the path length is summed over all virtual links, whereas the delay is determined only by the longest end-to-end path. QAG-VMTE reduces the delay by 37--41\% in NSFNET and 37--44\% in USNET compared with CRG-VMTE.
+
+Figs.~\ref{fig:vnode_nsf_acc} and \ref{fig:vnode_us_acc} show that the acceptance ratio of the greedy approaches decreases gradually rather than sharply. With 10 virtual nodes, the acceptance ratio of CRG-VMTE falls to 62.9\% in NSFNET and 58.3\% in USNET, while that of QAG-VMTE does not fall below 98.3\% in either network. This effect becomes stronger as the bandwidth demand increases. At a demand of 25, the acceptance ratio of CRG-VMTE drops from 50\% with 5 virtual nodes to 14\% with 10 virtual nodes in NSFNET and from 53\% to 5\% in USNET. In the same cases, QAG-VMTE maintains 95--100\%.
+
+\subsection{Overall Evaluation and the Effect of Q-Learning}
+\label{subsec:overall}
+
+Over the entire parameter space, the acceptance ratio in NSFNET is 73.5\% for CRG-VMTE, 78.3\% for CAN-VMTE, 96.2\% for GARC-VMTE and 98.5\% for QAG-VMTE. In USNET, these values are 74.3\%, 77.0\%, 96.7\% and 98.9\%, respectively. The proposed algorithms also make fewer inter-domain transitions than the greedy approaches. From CRG-VMTE to GARC-VMTE, the average number of inter-domain transitions per request decreases by 37--40\% and the delay decreases by 32--35\%. In the larger USNET, the number of hops per virtual link increases by 31--39\% for all algorithms, e.g., from 6.2 to 8.5 for CRG-VMTE and from 2.8 to 3.9 for QAG-VMTE, so the ranking of the algorithms is preserved. Among the greedy approaches, CAN-VMTE has no consistent advantage over CRG-VMTE. On a per-request basis, it uses fewer resources in only 58--62\% of the cases, and it achieves a lower delay in 58\% of the cases in NSFNET and in only 51\% in USNET, which is close to chance level.
+
+% NOT: Uc yonlendirici yerlesimi modelde serbesttir (sanal dugum, CPU yetiyorsa
+% uc yonlendiriciye yerlesebilir). Sanal dugum, bagli oldugu sanal baglantinin
+% alandan cikis/giris uc yonlendiricisindeyse o tarafta alan ici yol 0 atlamadir;
+% ara alanlarda 0 atlamali parca hic yoktur. Bir hakem uc yonlendiricilerin
+% sanal dugum barindirip barindiramayacagini sorabilir; bu varsayim deney
+% kurulumu bolumunde acikca belirtilmeli.
+The comparison between GARC-VMTE and QAG-VMTE directly reveals the effect of Q-learning. Compared with GARC-VMTE, Q-learning-based selection reduces the network resource usage by 19--32\% in all experiments, and it uses fewer resources in more than 99.5\% of the requests. Since the resource usage of a request is the product of its bandwidth demand and its hop count, this reduction is almost identical to the reduction in the average path length, which amounts to 23--27\%. The gain in delay is more limited. QAG-VMTE reduces the delay by only 7--9\% and achieves a lower delay in 84\% of the requests. The recorded paths explain this result. The two algorithms make almost the same number of inter-domain transitions per request (8.3 and 8.1 in NSFNET, 11.5 and 11.4 in USNET), and the gain of Q-learning comes mainly from intra-domain hops, which QAG-VMTE reduces by 35--40\%. This reduction largely stems from node placement. QAG-VMTE places 71\% (NSFNET) and 81\% (USNET) of the virtual nodes on edge routers, compared with 43--49\% for GARC-VMTE and 36--46\% for the greedy approaches, although edge routers constitute only 30--70\% of the physical nodes depending on the scale. When a virtual node is hosted on the edge router through which its virtual link leaves or enters the domain, no intra-domain hop is needed on that side. This holds for 57--58\% of the link ends of QAG-VMTE, but only for 11--19\% of those of the other algorithms. Since inter-domain links have much higher delay, this gain has a limited effect on the end-to-end delay. The effect of Q-learning on the acceptance ratio appears only under high resource pressure, such as with few switches per domain, high bandwidth demand or large requests; the largest gains are 7.7 and 8.1 percentage points at a demand of 25 and 4.3 percentage points with 10 virtual nodes in USNET. Overall, the end-to-end delay in multi-domain networks is largely determined by inter-domain transitions, and a delay-oriented improvement should primarily target them.
